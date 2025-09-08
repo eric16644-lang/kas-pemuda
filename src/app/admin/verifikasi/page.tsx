@@ -1,3 +1,4 @@
+// src/app/admin/verifikasi/page.tsx
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -32,24 +33,30 @@ export default function AdminVerifikasiPage() {
   const [memoIncome, setMemoIncome] = useState('')
 
   const fetchPending = useCallback(async () => {
-  setLoading(true)
-  setMsg(null)
-  const { data: s } = await supabase.auth.getSession()
-  const token = s.session?.access_token
-  if (!token) { setMsg('❌ Harus login sebagai ADMIN/TREASURER'); setLoading(false); return }
+    setLoading(true)
+    setMsg(null)
+    const { data: s } = await supabase.auth.getSession()
+    const token = s.session?.access_token
+    if (!token) {
+      setMsg('❌ Harus login sebagai ADMIN/TREASURER')
+      setLoading(false)
+      return
+    }
 
-  const res = await fetch('/api/admin/pending', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  const json = await res.json()
-  if (!res.ok) { setMsg(`❌ ${json.error || 'Gagal mengambil data'}`); setLoading(false); return }
-  setItems(json.data || [])
-  setLoading(false)
-}, [supabase])
+    const res = await fetch('/api/admin/pending', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const json: { data?: Proof[]; error?: string } = await res.json()
+    if (!res.ok) {
+      setMsg(`❌ ${json.error || 'Gagal mengambil data'}`)
+      setLoading(false)
+      return
+    }
+    setItems(json.data ?? [])
+    setLoading(false)
+  }, [supabase])
 
-
-  useEffect(() => { fetchPending() }, [fetchPending])
-
+  useEffect(() => { void fetchPending() }, [fetchPending])
 
   const onApprove = async (id: string) => {
     setBusyId(id); setMsg(null)
@@ -60,9 +67,9 @@ export default function AdminVerifikasiPage() {
     const res = await fetch('/api/admin/approve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ proofId: id })
+      body: JSON.stringify({ proofId: id }),
     })
-    const json = await res.json()
+    const json: { ok?: boolean; error?: string } = await res.json()
     if (!res.ok) setMsg(`❌ ${json.error || 'Gagal approve'}`)
     else { setMsg('✅ Disetujui'); await fetchPending() }
     setBusyId(null)
@@ -78,9 +85,9 @@ export default function AdminVerifikasiPage() {
     const res = await fetch('/api/admin/reject', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ proofId: id, notes })
+      body: JSON.stringify({ proofId: id, notes }),
     })
-    const json = await res.json()
+    const json: { ok?: boolean; error?: string } = await res.json()
     if (!res.ok) setMsg(`❌ ${json.error || 'Gagal reject'}`)
     else { setMsg('✅ Ditolak'); await fetchPending() }
     setBusyId(null)
@@ -92,19 +99,18 @@ export default function AdminVerifikasiPage() {
     const token = s.session?.access_token
     if (!token) { setMsg('❌ Harus login'); return }
     const amt = Number(amountExpense)
-    if (!amt || isNaN(amt) || amt <= 0) { setMsg('❌ Nominal pengeluaran tidak valid'); return }
+    if (!amt || Number.isNaN(amt) || amt <= 0) { setMsg('❌ Nominal pengeluaran tidak valid'); return }
 
     const res = await fetch('/api/admin/expense', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ amount: amt, memo: memoExpense })
+      body: JSON.stringify({ amount: amt, memo: memoExpense }),
     })
-    const json = await res.json()
+    const json: { ok?: boolean; error?: string } = await res.json()
     if (!res.ok) setMsg(`❌ ${json.error || 'Gagal catat pengeluaran'}`)
     else {
       setMsg('✅ Pengeluaran dicatat')
       setShowExpense(false); setAmountExpense(''); setMemoExpense('')
-      // opsional refresh pending (tidak wajib)
       await fetchPending()
     }
   }
@@ -115,14 +121,14 @@ export default function AdminVerifikasiPage() {
     const token = s.session?.access_token
     if (!token) { setMsg('❌ Harus login'); return }
     const amt = Number(amountIncome)
-    if (!amt || isNaN(amt) || amt <= 0) { setMsg('❌ Nominal pemasukan tidak valid'); return }
+    if (!amt || Number.isNaN(amt) || amt <= 0) { setMsg('❌ Nominal pemasukan tidak valid'); return }
 
     const res = await fetch('/api/admin/income', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ amount: amt, memo: memoIncome })
+      body: JSON.stringify({ amount: amt, memo: memoIncome }),
     })
-    const json = await res.json()
+    const json: { ok?: boolean; error?: string } = await res.json()
     if (!res.ok) setMsg(`❌ ${json.error || 'Gagal tambah saldo'}`)
     else {
       setMsg('✅ Saldo bertambah')
@@ -131,7 +137,7 @@ export default function AdminVerifikasiPage() {
     }
   }
 
-  const empty = useMemo(() => !loading && items.length === 0, [loading, items])
+  const empty = useMemo(() => !loading && items.length === 0, [loading, items.length])
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -203,14 +209,25 @@ export default function AdminVerifikasiPage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm mb-1">Nominal (Rp)</label>
-                <input className="w-full border rounded p-2" type="number" min="1" value={amountExpense} onChange={(e)=>setAmountExpense(e.target.value)} />
+                <input
+                  className="w-full border rounded p-2"
+                  type="number"
+                  min={1}
+                  value={amountExpense}
+                  onChange={(e) => setAmountExpense(e.target.value)}
+                />
               </div>
               <div>
                 <label className="block text-sm mb-1">Keterangan</label>
-                <input className="w-full border rounded p-2" value={memoExpense} onChange={(e)=>setMemoExpense(e.target.value)} placeholder="contoh: beli ATK" />
+                <input
+                  className="w-full border rounded p-2"
+                  value={memoExpense}
+                  onChange={(e) => setMemoExpense(e.target.value)}
+                  placeholder="contoh: beli ATK"
+                />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button className="px-3 py-2 rounded border" onClick={()=>setShowExpense(false)}>Batal</button>
+                <button className="px-3 py-2 rounded border" onClick={() => setShowExpense(false)}>Batal</button>
                 <button className="px-3 py-2 rounded bg-red-600 text-white" onClick={handleExpense}>Simpan</button>
               </div>
             </div>
@@ -226,14 +243,25 @@ export default function AdminVerifikasiPage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm mb-1">Nominal (Rp)</label>
-                <input className="w-full border rounded p-2" type="number" min="1" value={amountIncome} onChange={(e)=>setAmountIncome(e.target.value)} />
+                <input
+                  className="w-full border rounded p-2"
+                  type="number"
+                  min={1}
+                  value={amountIncome}
+                  onChange={(e) => setAmountIncome(e.target.value)}
+                />
               </div>
               <div>
                 <label className="block text-sm mb-1">Keterangan</label>
-                <input className="w-full border rounded p-2" value={memoIncome} onChange={(e)=>setMemoIncome(e.target.value)} placeholder="contoh: setoran tunai rapat" />
+                <input
+                  className="w-full border rounded p-2"
+                  value={memoIncome}
+                  onChange={(e) => setMemoIncome(e.target.value)}
+                  placeholder="contoh: setoran tunai rapat"
+                />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button className="px-3 py-2 rounded border" onClick={()=>setShowIncome(false)}>Batal</button>
+                <button className="px-3 py-2 rounded border" onClick={() => setShowIncome(false)}>Batal</button>
                 <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={handleIncome}>Simpan</button>
               </div>
             </div>

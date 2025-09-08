@@ -7,7 +7,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export async function POST(req: NextRequest) {
-  // Ambil token dari header Authorization
+  // Bearer token dari client
   const authHeader = req.headers.get('authorization') || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -15,9 +15,7 @@ export async function POST(req: NextRequest) {
   // Resolve user dari token
   const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   const { data: userRes, error: userErr } = await anon.auth.getUser(token)
-  if (userErr || !userRes?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  if (userErr || !userRes?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const user = userRes.user
 
   // Ambil form-data
@@ -34,13 +32,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Nominal tidak valid' }, { status: 400 })
   }
   if (!file) return NextResponse.json({ error: 'Screenshot wajib' }, { status: 400 })
-  if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: 'Maksimal 5MB' }, { status: 400 })
-  }
+  if (file.size > 5 * 1024 * 1024) return NextResponse.json({ error: 'Maksimal 5MB' }, { status: 400 })
   const allowed = ['image/jpeg', 'image/png']
-  if (!allowed.includes(file.type)) {
-    return NextResponse.json({ error: 'Format harus JPG/PNG' }, { status: 400 })
-  }
+  if (!allowed.includes(file.type)) return NextResponse.json({ error: 'Format harus JPG/PNG' }, { status: 400 })
 
   // Checksum
   const arrayBuf = await file.arrayBuffer()
@@ -55,9 +49,7 @@ export async function POST(req: NextRequest) {
   const { error: uploadErr } = await admin.storage
     .from('proofs')
     .upload(objectPath, buffer, { contentType: file.type, upsert: false })
-  if (uploadErr) {
-    return NextResponse.json({ error: `Upload gagal: ${uploadErr.message}` }, { status: 500 })
-  }
+  if (uploadErr) return NextResponse.json({ error: `Upload gagal: ${uploadErr.message}` }, { status: 500 })
 
   // Insert DB
   const { error: insertErr } = await admin.from('payment_proofs').insert({

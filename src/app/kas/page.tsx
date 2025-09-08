@@ -1,4 +1,3 @@
-// src/app/kas/page.tsx
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -27,22 +26,21 @@ export default function KasPublikPage() {
     try {
       const q = m ? `?month=${encodeURIComponent(m)}` : ''
       const res = await fetch(`/api/public/summary${q}`, { cache: 'no-store' })
-      const json = await res.json()
+      const json: { data?: Summary; error?: string } = await res.json()
       if (!res.ok) throw new Error(json.error || 'Gagal ambil data')
-      setSum(json.data)
+      setSum(json.data ?? null)
     } catch (e: unknown) {
-  const message = e instanceof Error ? e.message : 'Gagal ambil data'
-  setErr(message)
-} finally {
-
+      const message = e instanceof Error ? e.message : 'Gagal ambil data'
+      setErr(message)
+    } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchSummary(month) }, [month])
+  useEffect(() => { void fetchSummary(month) }, [month])
 
-  const recent = sum?.recent ?? []
-  const empty = useMemo(() => !loading && recent.length === 0, [loading, recent])
+  const recent = useMemo(() => sum?.recent ?? [], [sum])
+  const empty = useMemo(() => !loading && recent.length === 0, [loading, recent.length])
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
@@ -54,16 +52,12 @@ export default function KasPublikPage() {
 
         <div className="ml-auto">
           <label className="block text-sm text-gray-600 mb-1">Pilih Bulan</label>
-          <input
-            type="month"
-            className="border rounded px-3 py-2"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
+          <input type="month" className="border rounded px-3 py-2" value={month}
+                 onChange={(e) => setMonth(e.target.value)} />
         </div>
       </div>
 
-      {/* Rekap Bulanan */}
+      {/* Rekap Bulanan (pemasukan/pengeluaran/total) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-2xl border p-4">
           <div className="text-sm text-gray-500">Pemasukan</div>
@@ -80,16 +74,14 @@ export default function KasPublikPage() {
         <div className="rounded-2xl border p-4">
           <div className="text-sm text-gray-500">Total Bulan Ini</div>
           <div className="text-2xl font-semibold">
-            {rupiah(sum?.monthly.net ?? 0)}
+            {rupiah((sum?.monthly.credit ?? 0) - (sum?.monthly.debit ?? 0))}
           </div>
         </div>
       </div>
 
-      {/* Transaksi Terbaru (berdasar bulan terpilih) */}
+      {/* Transaksi Terbaru */}
       <div className="rounded-2xl border">
-        <div className="p-4 border-b font-medium">
-          Transaksi {sum?.month} (Terbaru)
-        </div>
+        <div className="p-4 border-b font-medium">Transaksi {sum?.month} (Terbaru)</div>
 
         {loading && <div className="p-4">Memuat…</div>}
         {err && <div className="p-4 text-red-600">❌ {err}</div>}
@@ -99,9 +91,7 @@ export default function KasPublikPage() {
           {recent.map((t, i) => (
             <div key={i} className="p-4 flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-500">
-                  {new Date(t.at).toLocaleString('id-ID')}
-                </div>
+                <div className="text-sm text-gray-500">{new Date(t.at).toLocaleString('id-ID')}</div>
                 {t.note && <div className="text-sm">{t.note}</div>}
               </div>
               <div className={`font-semibold ${t.kind === 'CREDIT' ? 'text-green-700' : 'text-red-700'}`}>

@@ -24,15 +24,14 @@ export default function AdminPengeluaranPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ amount: Number(amount), memo })
       })
-      const json = await res.json()
+      const json: { ok?: boolean; error?: string } = await res.json()
       if (!res.ok) throw new Error(json.error || 'Gagal catat pengeluaran')
       setMsg('✅ Pengeluaran dicatat')
       setAmount(''); setMemo('')
     } catch (err: unknown) {
-  const message = err instanceof Error ? err.message : 'Terjadi kesalahan'
-  setMsg(`❌ ${message}`)
-} finally {
-
+      const message = err instanceof Error ? err.message : 'Terjadi kesalahan'
+      setMsg(`❌ ${message}`)
+    } finally {
       setLoading(false)
     }
   }
@@ -43,29 +42,15 @@ export default function AdminPengeluaranPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm mb-1">Nominal (Rp)</label>
-          <input
-            type="number"
-            min="1"
-            className="w-full border rounded p-2"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
+          <input type="number" min="1" className="w-full border rounded p-2"
+                 value={amount} onChange={(e) => setAmount(e.target.value)} />
         </div>
         <div>
           <label className="block text-sm mb-1">Keterangan</label>
-          <input
-            type="text"
-            className="w-full border rounded p-2"
-            value={memo}
-            onChange={(e) => setMemo(e.target.value)}
-            placeholder="contoh: beli bola voli"
-          />
+          <input className="w-full border rounded p-2"
+                 value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="contoh: beli ATK" />
         </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-4 py-2 rounded bg-red-600 text-white disabled:opacity-60"
-        >
+        <button type="submit" disabled={loading} className="px-4 py-2 rounded bg-red-600 text-white disabled:opacity-60">
           {loading ? 'Menyimpan…' : 'Catat Pengeluaran'}
         </button>
       </form>

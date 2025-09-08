@@ -1,4 +1,3 @@
-// src/app/setor/page.tsx
 'use client'
 
 import { useState } from 'react'
@@ -18,17 +17,11 @@ export default function SetorPage() {
     e.preventDefault()
     setMsg(null)
 
-    // cek login dulu
-    const { data: session } = await supabase.auth.getSession()
-    if (!session.session) {
-      setMsg('Silakan login dulu.')
-      return
-    }
+    const { data: sessionRes } = await supabase.auth.getSession()
+    const accessToken = sessionRes.session?.access_token
+    if (!accessToken) { setMsg('Silakan login dulu.'); return }
 
-    if (!amount || !file) {
-      setMsg('Nominal & screenshot wajib.')
-      return
-    }
+    if (!amount || !file) { setMsg('Nominal & screenshot wajib.'); return }
 
     const form = new FormData()
     form.append('amount', amount)
@@ -36,17 +29,19 @@ export default function SetorPage() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/proofs', { method: 'POST', body: form })
-      const json = await res.json()
+      const res = await fetch('/api/proofs', {
+        method: 'POST',
+        body: form,
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      const json: { ok?: boolean; error?: string } = await res.json()
       if (!res.ok) throw new Error(json.error || 'Gagal kirim bukti')
       setMsg('✅ Bukti dikirim. Menunggu verifikasi admin.')
-      setAmount('')
-      setFile(null)
+      setAmount(''); setFile(null)
     } catch (err: unknown) {
-  const message = err instanceof Error ? err.message : 'Gagal kirim bukti'
-  setMsg(`❌ ${message}`)
-} finally {
-
+      const message = err instanceof Error ? err.message : 'Gagal kirim bukti'
+      setMsg(`❌ ${message}`)
+    } finally {
       setLoading(false)
     }
   }
@@ -57,35 +52,18 @@ export default function SetorPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm mb-1">Nominal (Rp)</label>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            className="w-full border rounded p-2"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="contoh: 10000"
-          />
+          <input type="number" min="1" step="1" className="w-full border rounded p-2"
+                 value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="contoh: 10000" />
         </div>
-
         <div>
           <label className="block text-sm mb-1">Screenshot bukti transfer (JPG/PNG, ≤5MB)</label>
-          <input
-            type="file"
-            accept="image/jpeg,image/png"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
+          <input type="file" accept="image/jpeg,image/png"
+                 onChange={(e) => setFile(e.target.files?.[0] || null)} />
         </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-4 py-2 rounded bg-black text-white disabled:opacity-60"
-        >
+        <button type="submit" disabled={loading} className="px-4 py-2 rounded bg-black text-white disabled:opacity-60">
           {loading ? 'Mengunggah…' : 'Kirim Bukti'}
         </button>
       </form>
-
       {msg && <p className="mt-4 text-sm">{msg}</p>}
     </div>
   )
