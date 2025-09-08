@@ -30,9 +30,11 @@ export default function KasPublikPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Gagal ambil data')
       setSum(json.data)
-    } catch (e: any) {
-      setErr(e.message)
-    } finally {
+    } catch (e: unknown) {
+  const message = e instanceof Error ? e.message : 'Gagal ambil data'
+  setErr(message)
+} finally {
+
       setLoading(false)
     }
   }

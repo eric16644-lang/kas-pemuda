@@ -28,9 +28,11 @@ export default function AdminPengeluaranPage() {
       if (!res.ok) throw new Error(json.error || 'Gagal catat pengeluaran')
       setMsg('✅ Pengeluaran dicatat')
       setAmount(''); setMemo('')
-    } catch (err: any) {
-      setMsg(`❌ ${err.message}`)
-    } finally {
+    } catch (err: unknown) {
+  const message = err instanceof Error ? err.message : 'Terjadi kesalahan'
+  setMsg(`❌ ${message}`)
+} finally {
+
       setLoading(false)
     }
   }

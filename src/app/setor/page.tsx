@@ -42,9 +42,11 @@ export default function SetorPage() {
       setMsg('✅ Bukti dikirim. Menunggu verifikasi admin.')
       setAmount('')
       setFile(null)
-    } catch (err: any) {
-      setMsg(`❌ ${err.message}`)
-    } finally {
+    } catch (err: unknown) {
+  const message = err instanceof Error ? err.message : 'Gagal kirim bukti'
+  setMsg(`❌ ${message}`)
+} finally {
+
       setLoading(false)
     }
   }

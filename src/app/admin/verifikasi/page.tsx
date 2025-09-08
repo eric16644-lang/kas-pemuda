@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
 type Proof = {
@@ -31,23 +31,25 @@ export default function AdminVerifikasiPage() {
   const [amountIncome, setAmountIncome] = useState('')
   const [memoIncome, setMemoIncome] = useState('')
 
-  const fetchPending = async () => {
-    setLoading(true)
-    setMsg(null)
-    const { data: s } = await supabase.auth.getSession()
-    const token = s.session?.access_token
-    if (!token) { setMsg('❌ Harus login sebagai ADMIN/TREASURER'); setLoading(false); return }
+  const fetchPending = useCallback(async () => {
+  setLoading(true)
+  setMsg(null)
+  const { data: s } = await supabase.auth.getSession()
+  const token = s.session?.access_token
+  if (!token) { setMsg('❌ Harus login sebagai ADMIN/TREASURER'); setLoading(false); return }
 
-    const res = await fetch('/api/admin/pending', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const json = await res.json()
-    if (!res.ok) { setMsg(`❌ ${json.error || 'Gagal mengambil data'}`); setLoading(false); return }
-    setItems(json.data || [])
-    setLoading(false)
-  }
+  const res = await fetch('/api/admin/pending', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  const json = await res.json()
+  if (!res.ok) { setMsg(`❌ ${json.error || 'Gagal mengambil data'}`); setLoading(false); return }
+  setItems(json.data || [])
+  setLoading(false)
+}, [supabase])
 
-  useEffect(() => { fetchPending() }, [])
+
+  useEffect(() => { fetchPending() }, [fetchPending])
+
 
   const onApprove = async (id: string) => {
     setBusyId(id); setMsg(null)
