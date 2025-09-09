@@ -16,34 +16,22 @@ export default function SetorPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
-  const [sessionReady, setSessionReady] = useState(false) // hindari kedip
+  const [sessionReady, setSessionReady] = useState(false)
+  const [success, setSuccess] = useState(false)   // ⬅️ indikator sukses
 
-  // Guard: pastikan user login. Kalau tidak, ke /login
+  // Pastikan user login; kalau tidak, arahkan ke /login
   useEffect(() => {
-    let unsub: (() => void) | undefined
     ;(async () => {
       const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        router.replace('/login')
-        return
-      }
+      if (!data.session) { router.replace('/login'); return }
       setSessionReady(true)
-      // Keep session in sync kalau status berubah
-      const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
-        if (!sess) router.replace('/login')
-      })
-      unsub = () => sub.subscription.unsubscribe()
     })()
-    return () => { if (unsub) unsub() }
   }, [router, supabase])
 
   // Object URL untuk preview
   useEffect(() => {
     if (!file) {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
-        setPreviewUrl(null)
-      }
+      if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }
       return
     }
     const newUrl = URL.createObjectURL(file)
@@ -56,25 +44,18 @@ export default function SetorPage() {
     setMsg(null)
     if (!f) { setFile(null); return }
     const okTypes = ['image/jpeg', 'image/png']
-    if (!okTypes.includes(f.type)) {
-      setMsg('❌ Format harus JPG atau PNG')
-      e.target.value = ''
-      return
-    }
+    if (!okTypes.includes(f.type)) { setMsg('❌ Format harus JPG/PNG'); e.target.value = ''; return }
     const max = 5 * 1024 * 1024
-    if (f.size > max) {
-      setMsg('❌ Ukuran maksimal 5MB')
-      e.target.value = ''
-      return
-    }
+    if (f.size > max) { setMsg('❌ Maks 5MB'); e.target.value = ''; return }
     setFile(f)
   }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+    e.preventDefault()            // pastikan tidak reload/navigasi
+    e.stopPropagation()
     setMsg(null)
+    setSuccess(false)
 
-    // Ambil akses token paling “segar”
     const { data } = await supabase.auth.getSession()
     const accessToken = data.session?.access_token
     if (!accessToken) { setMsg('Silakan login dulu.'); return }
@@ -91,11 +72,20 @@ export default function SetorPage() {
         method: 'POST',
         body: form,
         headers: { Authorization: `Bearer ${accessToken}` },
+        redirect: 'manual', // ⬅️ cegah auto-follow redirect jika server salah config
       })
+      // Jika server salah-salah kirim 3xx, fetch dengan 'manual' tidak akan auto-navigate
+      if (res.type === 'opaqueredirect' || res.status === 0) {
+        throw new Error('Respon tidak valid (redirect).')
+      }
       const json: ApiResp = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Gagal kirim bukti')
-      setMsg('✅ Bukti dikirim. Menunggu verifikasi admin.')
-      setAmount(''); setFile(null)
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Gagal kirim bukti')
+
+      // Sukses — reset form & tampilkan banner sukses
+      setAmount('')
+      setFile(null)
+      setSuccess(true)
+      setMsg(null)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Gagal kirim bukti'
       setMsg(`❌ ${message}`)
@@ -104,27 +94,27 @@ export default function SetorPage() {
     }
   }
 
-  // Hindari render form sebelum kepastian session (mengurangi flicker/redirect race)
   if (!sessionReady) {
-    return (
-      <div className="max-w-md mx-auto p-6">
-        <p>Memuat…</p>
-      </div>
-    )
+    return <div className="max-w-md mx-auto p-6">Memuat…</div>
   }
 
   return (
     <div className="max-w-md mx-auto p-6 space-y-6">
-      {/* Header + Tombol Kembali (pakai Link agar selalu bisa diklik) */}
+      {/* Header + Link kembali (bukan button submit) */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Setor Kas</h1>
-        <Link
-          href="/kas"
-          className="px-3 py-1 rounded border inline-block"
-        >
-          ← Kembali
-        </Link>
+        <Link href="/kas" className="px-3 py-1 rounded border inline-block">← Kembali</Link>
       </div>
+
+      {/* Banner sukses */}
+      {success && (
+        <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm">
+          ✅ Bukti dikirim. Menunggu verifikasi admin.
+          <div className="mt-2">
+            <Link href="/kas" className="underline text-green-700">Kembali ke halaman kas</Link>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
