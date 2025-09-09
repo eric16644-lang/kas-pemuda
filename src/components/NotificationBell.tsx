@@ -32,7 +32,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     void fetchNotif()
-    const id = setInterval(fetchNotif, 15000) // polling 15 detik
+    const id = setInterval(fetchNotif, 15000)
     return () => clearInterval(id)
   }, [])
 
@@ -45,7 +45,7 @@ export default function NotificationBell() {
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="relative px-3 py-2 rounded border"
+        className="relative px-3 py-2 rounded border bg-gray-800 text-white"
         title="Notifikasi"
       >
         🔔
@@ -57,28 +57,33 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-auto bg-white border rounded-lg shadow-lg z-20">
-          <div className="flex items-center justify-between p-2 border-b">
+        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-auto bg-gray-900 text-white border border-gray-700 rounded-lg shadow-lg z-20">
+          <div className="flex items-center justify-between p-2 border-b border-gray-700">
             <div className="font-medium">Notifikasi</div>
-            <button onClick={markAllRead} className="text-sm underline">Tandai semua dibaca</button>
+            <button
+              onClick={markAllRead}
+              className="text-sm text-blue-400 hover:underline"
+            >
+              Tandai semua dibaca
+            </button>
           </div>
 
-          {loading && <div className="p-3 text-sm">Memuat…</div>}
+          {loading && <div className="p-3 text-sm text-gray-400">Memuat…</div>}
           {!loading && items.length === 0 && (
-            <div className="p-3 text-sm text-gray-500">Tidak ada notifikasi.</div>
+            <div className="p-3 text-sm text-gray-400">Tidak ada notifikasi.</div>
           )}
 
-          <ul className="divide-y">
+          <ul className="divide-y divide-gray-700">
             {items.map((n) => (
-              <li key={n.id} className="p-3">
+              <li key={n.id} className="p-3 hover:bg-gray-800 transition">
                 <div className="flex items-center justify-between">
-                  <div className="font-medium">{n.title}</div>
-                  <div className="text-xs text-gray-500">
+                  <div className="font-semibold">{n.title}</div>
+                  <div className="text-xs text-gray-400">
                     {new Date(n.created_at).toLocaleString('id-ID')}
                   </div>
                 </div>
-                <div className="text-sm">{n.body}</div>
-                {!n.is_read && <div className="text-[10px] text-blue-600 mt-1">• Baru</div>}
+                <div className="text-sm text-gray-200">{n.body}</div>
+                {!n.is_read && <div className="text-[10px] text-blue-400 mt-1">• Baru</div>}
               </li>
             ))}
           </ul>
