@@ -6,7 +6,6 @@ const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const dynamic = 'force-dynamic'
 
-// Tipe sederhana untuk payload insert/update ke tabel ledger
 type LedgerType = 'CREDIT' | 'DEBIT'
 interface LedgerInsert {
   user_id: string
@@ -26,7 +25,6 @@ export async function POST(
   const res = new NextResponse()
   const supabase = createServerClient(URL, ANON, {
     cookies: {
-      // cookie bridge untuk Next.js 15 route handlers
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       getAll() { return (req.cookies.getAll() as any[]).map(({ name, value }: any) => ({ name, value })) },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,22 +32,18 @@ export async function POST(
     },
   })
 
-  // 1) Auth & role
+  // Auth & role
   const { data: s } = await supabase.auth.getSession()
   const adminId = s.session?.user.id
   if (!adminId) return NextResponse.json({ error: 'no-session' }, { status: 401 })
 
   const { data: me, error: eMe } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', adminId)
-    .single()
+    .from('users').select('role').eq('id', adminId).single()
   if (eMe) return NextResponse.json({ error: eMe.message }, { status: 500 })
-
   const isAdmin = me?.role === 'ADMIN' || me?.role === 'TREASURER'
   if (!isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
-  // 2) Ambil proof
+  // Ambil proof
   const { data: proof, error: eProof } = await supabase
     .from('payment_proofs')
     .select('id, user_id')
@@ -59,7 +53,7 @@ export async function POST(
     return NextResponse.json({ error: eProof?.message || 'proof-not-found' }, { status: 404 })
   }
 
-  // 3) Cek ledger existing
+  // Cek ledger existing
   const { data: existingLedger, error: eL } = await supabase
     .from('ledger')
     .select('id')
@@ -67,21 +61,21 @@ export async function POST(
     .limit(1)
   if (eL) return NextResponse.json({ error: eL.message }, { status: 500 })
 
-  // 4) Update status proof → APPROVED
+  // Update status proof → APPROVED
   const { error: eUpd } = await supabase
     .from('payment_proofs')
     .update({ status: 'APPROVED' })
     .eq('id', proofId)
   if (eUpd) return NextResponse.json({ error: eUpd.message }, { status: 500 })
 
-  // 5) Insert/update ledger — isi kolom NOT NULL: type + source
+  // Insert / update ledger — isi kolom NOT NULL: type + source
   const payload: LedgerInsert = {
     user_id: proof.user_id,
     type: 'CREDIT',
     amount: 0,
     note: 'Setoran Kas telah disetujui oleh Admin',
     proof_id: proofId,
-    source: 'PROOF',
+    source: 'MANUAL', // <<< pakai enum yang sudah ada
   }
 
   if (!existingLedger || existingLedger.length === 0) {
@@ -93,7 +87,7 @@ export async function POST(
       .update(payload)
       .eq('proof_id', proofId)
     if (eUpdLed) {
-      // jika mau strict: return NextResponse.json({ error: eUpdLed.message }, { status: 500 })
+      // kalau mau strict: return NextResponse.json({ error: eUpdLed.message }, { status: 500 })
     }
   }
 
