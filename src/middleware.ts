@@ -5,34 +5,51 @@ import { createServerClient } from '@supabase/ssr'
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
+type CookieSameSite = 'lax' | 'strict' | 'none'
+interface CookieOptions {
+  path?: string
+  domain?: string
+  maxAge?: number
+  expires?: Date
+  httpOnly?: boolean
+  secure?: boolean
+  sameSite?: CookieSameSite
+}
+
+type Role = 'ADMIN' | 'TREASURER' | 'MEMBER'
+
 async function getSessionAndRole(req: NextRequest) {
   const res = NextResponse.next()
 
-  // Buat Supabase server client yang sinkron dengan cookies (edge safe)
+  // ✅ Versi cookies untuk @supabase/ssr terbaru: getAll / setAll
   const supabase = createServerClient(URL, ANON, {
     cookies: {
-      get(name: string) { return req.cookies.get(name)?.value },
-      set(name: string, value: string, options: any) {
-        // sinkronkan cookie perubahan (misal refresh) ke response
-        res.cookies.set({ name, value, ...options })
+      getAll() {
+        // NextRequest.cookies.getAll() -> { name, value }[]
+        return req.cookies.getAll().map(({ name, value }) => ({ name, value }))
       },
-      remove(name: string, options: any) {
-        res.cookies.set({ name, value: '', ...options })
-      }
-    }
+      setAll(cookies) {
+        // sinkronkan cookie refresh dari Supabase ke response
+        ;(cookies as Array<{ name: string; value: string; options?: CookieOptions }>).forEach(
+          ({ name, value, options }) => {
+            res.cookies.set(name, value, options)
+          }
+        )
+      },
+    },
   })
 
   const { data: sess } = await supabase.auth.getSession()
   const user = sess.session?.user ?? null
 
-  let role: 'ADMIN' | 'TREASURER' | 'MEMBER' | null = null
+  let role: Role | null = null
   if (user) {
     const { data: profile } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single()
-    role = (profile?.role as any) ?? null
+    role = (profile?.role as Role | undefined) ?? null
   }
 
   return { res, user, role }
@@ -43,9 +60,8 @@ export async function middleware(req: NextRequest) {
   const { res, user, role } = await getSessionAndRole(req)
 
   const isAdmin = role === 'ADMIN' || role === 'TREASURER'
-  const requireAuth = (p: string) => p.startsWith('/setor') || p.startsWith('/admin')
 
-  // 1) Lindungi /admin/*
+  // /admin/* → wajib login & admin
   if (pathname.startsWith('/admin')) {
     if (!user) {
       const url = req.nextUrl.clone()
@@ -60,7 +76,7 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
-  // 2) Lindungi /setor (wajib login)
+  // /setor → wajib login
   if (pathname.startsWith('/setor')) {
     if (!user) {
       const url = req.nextUrl.clone()
@@ -70,7 +86,7 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
-  // 3) /login: kalau sudah login, arahkan sesuai role
+  // /login → kalau sudah login, arahkan sesuai role
   if (pathname === '/login') {
     if (user) {
       const url = req.nextUrl.clone()
@@ -80,11 +96,10 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
-  // default: lanjutkan
+  // default
   return res
 }
 
-// Terapkan middleware hanya ke rute yang perlu
 export const config = {
   matcher: ['/', '/login', '/setor', '/admin/:path*'],
 }
