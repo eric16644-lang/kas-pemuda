@@ -8,8 +8,9 @@ type ProofRow = {
   created_at: string
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
   user_id: string
-  amount?: number | null
-  proof_url?: string | null // jika kolom ini ada di payment_proofs
+  // amount TIDAK diwajibkan—kalau tidak ada kolomnya di DB, kita biarkan undefined
+  amount?: number | null | undefined
+  proof_url?: string | null
 }
 
 const rupiah = (n: number) =>
@@ -27,17 +28,18 @@ export default function AdminVerifikasiPage() {
     setLoading(true)
     setErr(null)
 
-    // pastikan sudah login
     const { data: s } = await supabase.auth.getSession()
     if (!s.session) {
       router.replace('/login')
       return
     }
 
-    // ambil daftar PENDING
+    // PILIH KOLOM YANG PASTI ADA
+    // Jika suatu saat kamu menambah kolom "amount" di payment_proofs,
+    // cukup ubah select di bawah menjadi: 'id, created_at, status, user_id, amount, proof_url'
     const { data, error } = await supabase
       .from('payment_proofs')
-      .select('id, created_at, status, user_id, amount, proof_url')
+      .select('id, created_at, status, user_id, proof_url')
       .eq('status', 'PENDING')
       .order('created_at', { ascending: false })
       .limit(100)
@@ -48,6 +50,7 @@ export default function AdminVerifikasiPage() {
       return
     }
 
+    // Map ke ProofRow (amount akan undefined karena tidak diminta)
     setItems((data ?? []) as ProofRow[])
     setLoading(false)
   }, [router, supabase])
@@ -87,16 +90,10 @@ export default function AdminVerifikasiPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Verifikasi Bukti Setoran</h1>
         <div className="flex gap-2">
-          <button
-            onClick={() => router.push('/admin')}
-            className="px-3 py-1 rounded border"
-          >
+          <button onClick={() => router.push('/admin')} className="px-3 py-1 rounded border">
             ← Kembali ke Dashboard
           </button>
-          <button
-            onClick={fetchPending}
-            className="px-3 py-1 rounded bg-gray-800 text-white hover:bg-gray-900"
-          >
+          <button onClick={fetchPending} className="px-3 py-1 rounded bg-gray-800 text-white hover:bg-gray-900">
             Muat Ulang
           </button>
         </div>
@@ -118,49 +115,49 @@ export default function AdminVerifikasiPage() {
         </div>
 
         <ul className="divide-y">
-          {items.map((p) => (
-            <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-center">
-              <div className="text-sm text-gray-600">
-                {new Date(p.created_at).toLocaleString('id-ID')}
-              </div>
-              <div className="text-sm break-all">{p.user_id}</div>
-              <div className="font-semibold">{rupiah(Number(p.amount || 0))}</div>
-              <div>
-                {p.proof_url ? (
-                  <a
-                    href={p.proof_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 underline"
+          {items.map((p) => {
+            const displayAmount =
+              typeof p.amount === 'number'
+                ? rupiah(Number(p.amount))
+                : '—' // kalau kolom amount belum ada, tampilkan strip
+
+            return (
+              <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-center">
+                <div className="text-sm text-gray-600">{new Date(p.created_at).toLocaleString('id-ID')}</div>
+                <div className="text-sm break-all">{p.user_id}</div>
+                <div className="font-semibold">{displayAmount}</div>
+                <div>
+                  {p.proof_url ? (
+                    <a href={p.proof_url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                      Lihat Bukti
+                    </a>
+                  ) : (
+                    <span className="text-xs text-gray-500">Tidak ada</span>
+                  )}
+                </div>
+                <div className="md:col-span-2 flex md:justify-end gap-2">
+                  <button
+                    onClick={() => approve(p.id)}
+                    className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
                   >
-                    Lihat Bukti
-                  </a>
-                ) : (
-                  <span className="text-xs text-gray-500">Tidak ada</span>
-                )}
-              </div>
-              <div className="md:col-span-2 flex md:justify-end gap-2">
-                <button
-                  onClick={() => approve(p.id)}
-                  className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => reject(p.id)}
-                  className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
-                >
-                  Reject
-                </button>
-              </div>
-            </li>
-          ))}
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => reject(p.id)}
+                    className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       </div>
 
       <p className="text-xs text-gray-500">
-        Catatan: kolom <code>proof_url</code> opsional. Jika kamu menyimpan bukti di Supabase Storage, pastikan
-        menyimpan URL publiknya di <code>payment_proofs.proof_url</code> saat upload.
+        Catatan: kolom <code>proof_url</code> opsional. Jika kamu menyimpan bukti di Supabase Storage, simpan URL
+        publiknya di <code>payment_proofs.proof_url</code> saat upload.
       </p>
     </div>
   )
