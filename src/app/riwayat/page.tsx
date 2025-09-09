@@ -6,9 +6,13 @@ import { supabaseBrowser } from '@/lib/supabaseBrowser'
 type ProofRow = {
   id: string
   created_at: string
-  amount: number
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
   note: string | null
+}
+
+type LedgerRow = {
+  proof_id: string | null
+  amount: number
 }
 
 const rupiah = (n: number) =>
@@ -19,24 +23,61 @@ export default function RiwayatPage() {
   const supabase = supabaseBrowser()
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<ProofRow[]>([])
+  const [amountMap, setAmountMap] = useState<Record<string, number>>({})
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
     ;(async () => {
       const { data: s } = await supabase.auth.getSession()
       if (!s.session) { router.replace('/login'); return }
+
       setLoading(true); setErr(null)
-      const { data, error } = await supabase
+
+      // 1) Ambil riwayat bukti milik user
+      const { data: proofs, error: e1 } = await supabase
         .from('payment_proofs')
-        .select('id, created_at, amount, status, note')
+        .select('id, created_at, status, note')
         .eq('user_id', s.session.user.id)
         .order('created_at', { ascending: false })
         .limit(100)
-      if (error) setErr(error.message)
-      setItems((data as ProofRow[]) ?? [])
+
+      if (e1) {
+        setErr(e1.message)
+        setLoading(false)
+        return
+      }
+
+      const list = (proofs ?? []) as ProofRow[]
+      setItems(list)
+
+      // 2) Untuk yang APPROVED, ambil amount dari ledger (kind=CREDIT)
+      const approvedIds = list.filter(p => p.status === 'APPROVED').map(p => p.id)
+      if (approvedIds.length > 0) {
+        const { data: rows, error: e2 } = await supabase
+          .from('ledger')
+          .select('proof_id, amount')
+          .eq('user_id', s.session.user.id)
+          .eq('kind', 'CREDIT')
+          .in('proof_id', approvedIds)
+
+        if (!e2 && rows) {
+          const map: Record<string, number> = {}
+          ;(rows as LedgerRow[]).forEach(r => {
+            if (r.proof_id) map[r.proof_id] = Number(r.amount)
+          })
+          setAmountMap(map)
+        }
+      }
+
       setLoading(false)
     })()
   }, [router, supabase])
+
+  const renderAmount = (p: ProofRow) => {
+    if (p.status !== 'APPROVED') return '-' // belum jadi transaksi
+    const amt = amountMap[p.id]
+    return typeof amt === 'number' ? rupiah(amt) : '-'
+  }
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-4">
@@ -68,7 +109,7 @@ export default function RiwayatPage() {
               <div className="sm:col-span-2 text-sm">
                 {p.note || 'Setoran kas'}
               </div>
-              <div className="font-semibold">{rupiah(Number(p.amount))}</div>
+              <div className="font-semibold">{renderAmount(p)}</div>
               <div>
                 <span className={`px-2 py-1 rounded text-xs
                   ${p.status === 'APPROVED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
