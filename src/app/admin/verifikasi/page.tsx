@@ -8,9 +8,9 @@ type ProofRow = {
   created_at: string
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
   user_id: string
-  // amount TIDAK diwajibkan—kalau tidak ada kolomnya di DB, kita biarkan undefined
+  // opsional; tetap ada di type tapi kita TIDAK select kolom ini
+  proof_url?: string | null | undefined
   amount?: number | null | undefined
-  proof_url?: string | null
 }
 
 const rupiah = (n: number) =>
@@ -34,12 +34,10 @@ export default function AdminVerifikasiPage() {
       return
     }
 
-    // PILIH KOLOM YANG PASTI ADA
-    // Jika suatu saat kamu menambah kolom "amount" di payment_proofs,
-    // cukup ubah select di bawah menjadi: 'id, created_at, status, user_id, amount, proof_url'
+    // HANYA pilih kolom yang pasti ada
     const { data, error } = await supabase
       .from('payment_proofs')
-      .select('id, created_at, status, user_id, proof_url')
+      .select('id, created_at, status, user_id')
       .eq('status', 'PENDING')
       .order('created_at', { ascending: false })
       .limit(100)
@@ -50,7 +48,6 @@ export default function AdminVerifikasiPage() {
       return
     }
 
-    // Map ke ProofRow (amount akan undefined karena tidak diminta)
     setItems((data ?? []) as ProofRow[])
     setLoading(false)
   }, [router, supabase])
@@ -106,58 +103,47 @@ export default function AdminVerifikasiPage() {
       )}
 
       <div className="rounded-2xl border overflow-hidden">
-        <div className="hidden md:grid grid-cols-6 gap-2 px-4 py-2 border-b text-sm font-medium bg-gray-50 dark:bg-gray-800">
+        <div className="hidden md:grid grid-cols-5 gap-2 px-4 py-2 border-b text-sm font-medium bg-gray-50 dark:bg-gray-800">
           <div>Tanggal</div>
           <div>User</div>
-          <div>Nominal</div>
-          <div>Bukti</div>
-          <div className="col-span-2 text-right pr-2">Aksi</div>
+          <div className="text-center">Bukti</div>
+          <div className="text-center">Status</div>
+          <div className="text-right pr-2">Aksi</div>
         </div>
 
         <ul className="divide-y">
-          {items.map((p) => {
-            const displayAmount =
-              typeof p.amount === 'number'
-                ? rupiah(Number(p.amount))
-                : '—' // kalau kolom amount belum ada, tampilkan strip
-
-            return (
-              <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-center">
-                <div className="text-sm text-gray-600">{new Date(p.created_at).toLocaleString('id-ID')}</div>
-                <div className="text-sm break-all">{p.user_id}</div>
-                <div className="font-semibold">{displayAmount}</div>
-                <div>
-                  {p.proof_url ? (
-                    <a href={p.proof_url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-                      Lihat Bukti
-                    </a>
-                  ) : (
-                    <span className="text-xs text-gray-500">Tidak ada</span>
-                  )}
-                </div>
-                <div className="md:col-span-2 flex md:justify-end gap-2">
-                  <button
-                    onClick={() => approve(p.id)}
-                    className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => reject(p.id)}
-                    className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
-                  >
-                    Reject
-                  </button>
-                </div>
-              </li>
-            )
-          })}
+          {items.map((p) => (
+            <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
+              <div className="text-sm text-gray-600">{new Date(p.created_at).toLocaleString('id-ID')}</div>
+              <div className="text-sm break-all">{p.user_id}</div>
+              <div className="text-center text-xs text-gray-400">—</div>
+              <div className="text-center">
+                <span className="rounded-full px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-700">
+                  {p.status}
+                </span>
+              </div>
+              <div className="flex md:justify-end gap-2">
+                <button
+                  onClick={() => approve(p.id)}
+                  className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => reject(p.id)}
+                  className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                >
+                  Reject
+                </button>
+              </div>
+            </li>
+          ))}
         </ul>
       </div>
 
       <p className="text-xs text-gray-500">
-        Catatan: kolom <code>proof_url</code> opsional. Jika kamu menyimpan bukti di Supabase Storage, simpan URL
-        publiknya di <code>payment_proofs.proof_url</code> saat upload.
+        (Opsional) Jika nanti kamu menyimpan URL bukti, tambahkan kolom <code>proof_url</code> di
+        <code> payment_proofs</code> lalu tampilkan link-nya di kolom “Bukti”.
       </p>
     </div>
   )
