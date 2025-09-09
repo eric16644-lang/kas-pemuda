@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const dynamic = 'force-dynamic' // jaga-jaga agar tidak di-cache
+export const dynamic = 'force-dynamic'
 
 export async function POST(
   req: NextRequest,
@@ -36,51 +36,17 @@ export async function POST(
   const isAdmin = me?.role === 'ADMIN' || me?.role === 'TREASURER'
   if (!isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
-  // 2) Ambil proof (tanpa kolom opsional)
-  const { data: proof, error: eProof } = await supabase
-    .from('payment_proofs')
-    .select('id, user_id')
-    .eq('id', proofId)
-    .single()
-  if (eProof || !proof) {
-    return NextResponse.json({ error: eProof?.message || 'proof-not-found' }, { status: 404 })
-  }
-
-  // 3) Cek ledger existing
-  const { data: existingLedger, error: eL } = await supabase
-    .from('ledger')
-    .select('id')
-    .eq('proof_id', proofId)
-    .limit(1)
-  if (eL) return NextResponse.json({ error: eL.message }, { status: 500 })
-
-  // 4) Update status proof → APPROVED
+  // 2) Update status → REJECTED
   const { error: eUpd } = await supabase
     .from('payment_proofs')
-    .update({ status: 'APPROVED' })
+    .update({ status: 'REJECTED' })
     .eq('id', proofId)
   if (eUpd) return NextResponse.json({ error: eUpd.message }, { status: 500 })
 
-  // 5) Insert/update ledger (amount default 0 jika belum ada sumber nominal)
-  const amount = 0
-
-  if (!existingLedger || existingLedger.length === 0) {
-    const { error: eIns } = await supabase.from('ledger').insert({
-      user_id: proof.user_id,
-      kind: 'CREDIT',
-      amount,
-      note: 'Setoran Kas telah disetujui oleh Admin',
-      proof_id: proofId,
-    })
-    if (eIns) return NextResponse.json({ error: eIns.message }, { status: 500 })
-  } else {
-    const { error: eUpdLed } = await supabase
-      .from('ledger')
-      .update({ note: 'Setoran Kas telah disetujui oleh Admin', kind: 'CREDIT' })
-      .eq('proof_id', proofId)
-    if (eUpdLed) {
-      // non-fatal; bisa di-return jika ingin strict
-    }
+  // 3) Hapus ledger terkait proof (jika ada)
+  const { error: eDel } = await supabase.from('ledger').delete().eq('proof_id', proofId)
+  if (eDel) {
+    // non-fatal; boleh diabaikan
   }
 
   return NextResponse.json({ ok: true }, { headers: res.headers })
