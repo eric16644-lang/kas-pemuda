@@ -1,9 +1,9 @@
-// src/app/admin/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import NotificationBell from '@/components/NotificationBell'
+import UserMenu from '@/components/UserMenu'
 
 type Tx = { at: string; kind: 'CREDIT' | 'DEBIT'; amount: number; note: string | null }
 type Monthly = { credit: number; debit: number; net: number }
@@ -46,11 +46,6 @@ export default function AdminDashboardPage() {
 
   useEffect(() => { void fetchSummary() }, [])
 
-  const onLogout = async () => {
-    await supabase.auth.signOut()
-    router.replace('/login')
-  }
-
   const callAdmin = async (url: string, confirmText: string) => {
     setMsg(null)
     const ok = confirm(confirmText)
@@ -89,18 +84,7 @@ export default function AdminDashboardPage() {
           >
             + Setor
           </button>
-          <button
-            onClick={() => router.push('/profile')}
-            className="px-4 py-2 rounded border"
-          >
-            Profil
-          </button>
-          <button
-            onClick={onLogout}
-            className="px-4 py-2 rounded border"
-          >
-            Logout
-          </button>
+          <UserMenu />
         </div>
       </div>
 

@@ -1,9 +1,9 @@
-// src/app/kas/page.tsx
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import NotificationBell from '@/components/NotificationBell'
+import UserMenu from '@/components/UserMenu'
 
 type Tx = { at: string; kind: 'CREDIT' | 'DEBIT'; amount: number; note: string | null }
 type Monthly = { credit: number; debit: number; net: number }
@@ -48,11 +48,6 @@ export default function KasPublikPage() {
   const recent = useMemo(() => sum?.recent ?? [], [sum])
   const empty = useMemo(() => !loading && recent.length === 0, [loading, recent.length])
 
-  const onLogout = async () => {
-    await supabase.auth.signOut()
-    router.replace('/login')
-  }
-
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       {/* Header + tombol */}
@@ -69,18 +64,7 @@ export default function KasPublikPage() {
           >
             + Setor
           </button>
-          <button
-            onClick={() => router.push('/profile')}
-            className="px-4 py-2 rounded border"
-          >
-            Profil
-          </button>
-          <button
-            onClick={onLogout}
-            className="px-4 py-2 rounded border"
-          >
-            Logout
-          </button>
+          <UserMenu />
         </div>
       </div>
 
