@@ -19,8 +19,9 @@ export default function AdminDashboardPage() {
   const [sum, setSum] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  // Guard ringan: kalau belum login, arahkan ke /login (middleware juga sudah melindungi)
   useEffect(() => {
     ;(async () => {
       const { data } = await supabase.auth.getSession()
@@ -31,7 +32,6 @@ export default function AdminDashboardPage() {
   const fetchSummary = async () => {
     setLoading(true); setErr(null)
     try {
-      // API publik summary kita sudah menampilkan total & 20 transaksi terbaru
       const res = await fetch('/api/public/summary', { cache: 'no-store' })
       const json: { data?: Summary; error?: string } = await res.json()
       if (!res.ok) throw new Error(json.error || 'Gagal ambil ringkasan')
@@ -51,6 +51,25 @@ export default function AdminDashboardPage() {
   const onLogout = async () => {
     await supabase.auth.signOut()
     router.replace('/login')
+  }
+
+  const callAdmin = async (url: string, confirmText: string) => {
+    setMsg(null)
+    const ok = confirm(confirmText)
+    if (!ok) return
+    setBusy(true)
+    try {
+      const res = await fetch(url, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Operasi gagal')
+      setMsg('✅ Operasi berhasil.')
+      await fetchSummary()
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Operasi gagal'
+      setMsg(`❌ ${message}`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -81,6 +100,8 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {msg && <div className="text-sm">{msg}</div>}
+
       {/* Kartu ringkasan */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="rounded-2xl border p-4">
@@ -98,6 +119,38 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* Aksi berbahaya */}
+      <div className="rounded-2xl border p-4">
+        <div className="font-medium mb-2">Aksi Admin (Hati-hati)</div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            disabled={busy}
+            onClick={() =>
+              callAdmin('/api/admin/reset-balance', 'Reset saldo ke 0 dengan penyesuaian? Riwayat TETAP ADA.')
+            }
+            className="px-4 py-2 rounded border"
+            title="Buat entry penyesuaian agar saldo jadi 0"
+          >
+            Reset Saldo ke 0 (Penyesuaian)
+          </button>
+
+          <button
+            disabled={busy}
+            onClick={() =>
+              callAdmin('/api/admin/wipe', 'KOSONGKAN seluruh riwayat transaksi? TINDAKAN INI TIDAK BISA DIBATALKAN.')
+            }
+            className="px-4 py-2 rounded bg-red-600 text-white"
+            title="Hapus semua transaksi di ledger"
+          >
+            Kosongkan Riwayat (Hapus Ledger)
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          • <strong>Reset Saldo</strong>: menambah satu transaksi penyesuaian agar total saldo menjadi 0 (riwayat sebelumnya tetap tersimpan).<br/>
+          • <strong>Kosongkan Riwayat</strong>: menghapus semua transaksi di ledger (tidak dapat dibatalkan).
+        </p>
+      </div>
+
       {/* Riwayat transaksi */}
       <div className="rounded-2xl border">
         <div className="p-4 border-b font-medium flex items-center justify-between">
@@ -107,17 +160,15 @@ export default function AdminDashboardPage() {
 
         {loading && <div className="p-4">Memuat…</div>}
         {err && <div className="p-4 text-red-600">❌ {err}</div>}
-        {!loading && !err && recent.length === 0 && (
+        {!loading && !err && (sum?.recent?.length ?? 0) === 0 && (
           <div className="p-4 text-sm text-gray-500">Belum ada transaksi.</div>
         )}
 
         <div className="divide-y">
-          {recent.map((t, i) => (
+          {sum?.recent?.map((t, i) => (
             <div key={i} className="p-4 flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-500">
-                  {new Date(t.at).toLocaleString('id-ID')}
-                </div>
+                <div className="text-sm text-gray-500">{new Date(t.at).toLocaleString('id-ID')}</div>
                 {t.note && <div className="text-sm">{t.note}</div>}
               </div>
               <div className={`font-semibold ${t.kind === 'CREDIT' ? 'text-green-700' : 'text-red-700'}`}>
@@ -127,10 +178,6 @@ export default function AdminDashboardPage() {
           ))}
         </div>
       </div>
-
-      <p className="text-xs text-gray-500">
-        Tips: gunakan tombol <strong>Verifikasi</strong> untuk memproses setoran PENDING.
-      </p>
     </div>
   )
 }
