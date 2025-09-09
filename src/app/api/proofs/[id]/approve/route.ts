@@ -22,7 +22,7 @@ export async function POST(
     },
   })
 
-  // Auth & role
+  // 1) Auth & role
   const { data: s } = await supabase.auth.getSession()
   const adminId = s.session?.user.id
   if (!adminId) return NextResponse.json({ error: 'no-session' }, { status: 401 })
@@ -33,7 +33,7 @@ export async function POST(
   const isAdmin = me?.role === 'ADMIN' || me?.role === 'TREASURER'
   if (!isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
-  // Ambil proof
+  // 2) Ambil proof
   const { data: proof, error: eProof } = await supabase
     .from('payment_proofs')
     .select('id, user_id')
@@ -43,7 +43,7 @@ export async function POST(
     return NextResponse.json({ error: eProof?.message || 'proof-not-found' }, { status: 404 })
   }
 
-  // Cek ledger existing
+  // 3) Cek ledger existing
   const { data: existingLedger, error: eL } = await supabase
     .from('ledger')
     .select('id')
@@ -51,32 +51,35 @@ export async function POST(
     .limit(1)
   if (eL) return NextResponse.json({ error: eL.message }, { status: 500 })
 
-  // Update status proof → APPROVED
+  // 4) Update status proof → APPROVED
   const { error: eUpd } = await supabase
     .from('payment_proofs')
     .update({ status: 'APPROVED' })
     .eq('id', proofId)
   if (eUpd) return NextResponse.json({ error: eUpd.message }, { status: 500 })
 
-  // Insert/update ledger — gunakan kolom `type` (bukan `kind`)
+  // 5) Insert/update ledger — isi kolom NOT NULL: type + source
   const amount = 0
+  const note = 'Setoran Kas telah disetujui oleh Admin'
+  const source = 'PROOF' as const // menandai asal transaksi dari bukti setor
 
   if (!existingLedger || existingLedger.length === 0) {
     const { error: eIns } = await supabase.from('ledger').insert({
       user_id: proof.user_id,
-      type: 'CREDIT',                      // ← penting
+      type: 'CREDIT',
       amount,
-      note: 'Setoran Kas telah disetujui oleh Admin',
+      note,
       proof_id: proofId,
-    })
+      source, // ← penting: kolom NOT NULL
+    } as any)
     if (eIns) return NextResponse.json({ error: eIns.message }, { status: 500 })
   } else {
     const { error: eUpdLed } = await supabase
       .from('ledger')
-      .update({ note: 'Setoran Kas telah disetujui oleh Admin', type: 'CREDIT' })
+      .update({ note, type: 'CREDIT', source })
       .eq('proof_id', proofId)
     if (eUpdLed) {
-      // non-fatal; abaikan atau kembalikan error jika mau strict
+      // non-fatal; kalau mau strict bisa return error
     }
   }
 
