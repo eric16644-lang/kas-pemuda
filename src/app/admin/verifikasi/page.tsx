@@ -9,7 +9,7 @@ type ProofRow = {
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
   user_id: string
   amount_input: number | null
-  proof_url: string | null
+  screenshot_url: string | null
 }
 
 const rupiah = (n: number) =>
@@ -33,7 +33,7 @@ export default function AdminVerifikasiPage() {
 
     const { data, error } = await supabase
       .from('payment_proofs')
-      .select('id, created_at, status, user_id, amount_input, proof_url')
+      .select('id, created_at, status, user_id, amount_input, screenshot_url')
       .eq('status', 'PENDING')
       .order('created_at', { ascending: false })
       .limit(100)
@@ -55,7 +55,6 @@ export default function AdminVerifikasiPage() {
       let bodyString: string | undefined
       let headers: HeadersInit | undefined
 
-      // data lama yang belum punya amount_input (harusnya jarang)
       if (existingAmount === null) {
         const raw = fallbackAmount[id]
         const a = Number(raw?.replace(/\D+/g, ''))
@@ -142,14 +141,14 @@ export default function AdminVerifikasiPage() {
                 <span className="rounded-full px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-700">{p.status}</span>
               </div>
               <div className="text-center">
-                {p.proof_url
-                  ? <img src={p.proof_url} alt="bukti" className="inline-block h-12 w-12 object-cover rounded" />
+                {p.screenshot_url
+                  ? <img src={p.screenshot_url} alt="bukti" className="inline-block h-12 w-12 object-cover rounded" />
                   : <span className="text-xs text-gray-400">—</span>
                 }
               </div>
               <div className="text-center">
-                {p.proof_url
-                  ? <a href={p.proof_url} target="_blank" className="text-blue-600 underline text-xs">Buka</a>
+                {p.screenshot_url
+                  ? <a href={p.screenshot_url} target="_blank" className="text-blue-600 underline text-xs">Buka</a>
                   : <span className="text-xs text-gray-400">—</span>
                 }
               </div>

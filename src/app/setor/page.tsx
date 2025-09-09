@@ -21,45 +21,46 @@ export default function SetorPage() {
       setError('Masukkan nominal yang benar (> 0).')
       return
     }
+    if (!file) {
+      setError('Bukti (screenshot) wajib diunggah.')
+      return
+    }
 
     setUploading(true)
 
     // 1) Upload file ke Supabase Storage (BUCKET: proofs)
-    let proof_url: string | undefined
-    if (file) {
-      const { data: s } = await supabase.auth.getSession()
-      const uid = s.session?.user.id
-      if (!uid) {
-        setError('Anda belum login.')
-        setUploading(false)
-        return
-      }
-
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
-      const path = `${uid}/${Date.now()}.${ext}`
-
-      const up = await supabase.storage.from('proofs').upload(path, file, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType: file.type || 'image/jpeg',
-      })
-      if (up.error) {
-        setError('Gagal upload bukti: ' + up.error.message)
-        setUploading(false)
-        return
-      }
-
-      const pub = supabase.storage.from('proofs').getPublicUrl(path)
-      proof_url = pub.data.publicUrl
+    const { data: s } = await supabase.auth.getSession()
+    const uid = s.session?.user.id
+    if (!uid) {
+      setError('Anda belum login.')
+      setUploading(false)
+      return
     }
 
-    // 2) Kirim data ke API (amount wajib, proof_url opsional)
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+    const path = `${uid}/${Date.now()}.${ext}`
+
+    const up = await supabase.storage.from('proofs').upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type || 'image/jpeg',
+    })
+    if (up.error) {
+      setError('Gagal upload bukti: ' + up.error.message)
+      setUploading(false)
+      return
+    }
+
+    const pub = supabase.storage.from('proofs').getPublicUrl(path)
+    const screenshot_url = pub.data.publicUrl
+
+    // 2) Kirim data ke API (amount_input + screenshot_url)
     const r = await fetch('/api/proofs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: a, proof_url }),
+      body: JSON.stringify({ amount: a, screenshot_url }),
     })
-    const j = await r.json().catch(() => ({}))
+    const j = await r.json().catch(() => ({} as any))
 
     setUploading(false)
 
@@ -91,15 +92,16 @@ export default function SetorPage() {
         </div>
 
         <div>
-          <label className="block text-sm mb-1">Bukti Transfer (gambar)</label>
+          <label className="block text-sm mb-1">Bukti Transfer (screenshot) – wajib</label>
           <input
             type="file"
             accept="image/*"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="w-full"
+            required
           />
           <p className="text-xs text-gray-500 mt-1">
-            Unggah screenshot/foto bukti transfer (opsional, tapi dianjurkan).
+            Unggah screenshot/foto bukti transfer.
           </p>
         </div>
 

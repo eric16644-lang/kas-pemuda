@@ -21,22 +21,26 @@ export async function POST(req: NextRequest) {
   const uid = s.session?.user.id
   if (!uid) return NextResponse.json({ error: 'no-session' }, { status: 401 })
 
-  // body: { amount: number, proof_url?: string }
-  let body: { amount?: unknown; proof_url?: unknown } = {}
+  // body: { amount: number, screenshot_url: string }
+  let body: { amount?: unknown; screenshot_url?: unknown } = {}
   try { body = await req.json() } catch {}
   const amount = typeof body.amount === 'number' ? body.amount : NaN
-  const proof_url = typeof body.proof_url === 'string' && body.proof_url.trim() ? body.proof_url.trim() : null
+  const screenshot_url = typeof body.screenshot_url === 'string' && body.screenshot_url.trim()
+    ? body.screenshot_url.trim()
+    : null
 
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: 'amount-required-positive' }, { status: 400 })
   }
+  if (!screenshot_url) {
+    return NextResponse.json({ error: 'screenshot_url-required' }, { status: 400 })
+  }
 
-  // ⬇️ gunakan kolom amount_input (NOT NULL) sesuai schema yang ada
   const { error } = await supabase.from('payment_proofs').insert({
     user_id: uid,
     status: 'PENDING',
-    amount_input: amount,
-    proof_url,
+    amount_input: amount,     // sesuai schema kamu (NOT NULL)
+    screenshot_url,           // sesuai schema kamu (NOT NULL)
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
