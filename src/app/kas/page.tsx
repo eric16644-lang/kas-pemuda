@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
+import NotificationBell from '@/components/NotificationBell'
 
 type Tx = { at: string; kind: 'CREDIT' | 'DEBIT'; amount: number; note: string | null }
 type Monthly = { credit: number; debit: number; net: number }
@@ -61,6 +62,7 @@ export default function KasPublikPage() {
           <div className="text-3xl font-semibold">{rupiah(sum?.total_all_time ?? 0)}</div>
         </div>
         <div className="flex items-center gap-2">
+          <NotificationBell />
           <button
             onClick={() => router.push('/setor')}
             className="px-4 py-2 rounded bg-green-600 text-white"
@@ -70,14 +72,12 @@ export default function KasPublikPage() {
           <button
             onClick={() => router.push('/profile')}
             className="px-4 py-2 rounded border"
-            title="Lihat & ubah profil"
           >
             Profil
           </button>
           <button
             onClick={onLogout}
             className="px-4 py-2 rounded border"
-            title="Keluar dari akun"
           >
             Logout
           </button>

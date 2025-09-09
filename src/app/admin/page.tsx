@@ -1,9 +1,9 @@
 // src/app/admin/page.tsx
 'use client'
-
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
+import NotificationBell from '@/components/NotificationBell'
 
 type Tx = { at: string; kind: 'CREDIT' | 'DEBIT'; amount: number; note: string | null }
 type Monthly = { credit: number; debit: number; net: number }
@@ -76,6 +76,7 @@ export default function AdminDashboardPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-2xl font-semibold">Dashboard Admin</h1>
         <div className="flex items-center gap-2">
+          <NotificationBell />
           <button
             onClick={() => router.push('/admin/verifikasi')}
             className="px-4 py-2 rounded bg-blue-600 text-white"
@@ -91,14 +92,12 @@ export default function AdminDashboardPage() {
           <button
             onClick={() => router.push('/profile')}
             className="px-4 py-2 rounded border"
-            title="Lihat & ubah profil"
           >
             Profil
           </button>
           <button
             onClick={onLogout}
             className="px-4 py-2 rounded border"
-            title="Keluar akun admin"
           >
             Logout
           </button>
@@ -134,24 +133,21 @@ export default function AdminDashboardPage() {
               callAdmin('/api/admin/reset-balance', 'Reset saldo ke 0 dengan penyesuaian? Riwayat TETAP ADA.')
             }
             className="px-4 py-2 rounded border"
-            title="Buat entry penyesuaian agar saldo jadi 0"
           >
             Reset Saldo ke 0 (Penyesuaian)
           </button>
-
           <button
             disabled={busy}
             onClick={() =>
               callAdmin('/api/admin/wipe', 'KOSONGKAN seluruh riwayat transaksi? TINDAKAN INI TIDAK BISA DIBATALKAN.')
             }
             className="px-4 py-2 rounded bg-red-600 text-white"
-            title="Hapus semua transaksi di ledger"
           >
             Kosongkan Riwayat (Hapus Ledger)
           </button>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          • <strong>Reset Saldo</strong>: menambah satu transaksi penyesuaian agar total saldo menjadi 0 (riwayat sebelumnya tetap tersimpan).<br/>
+          • <strong>Reset Saldo</strong>: menambah satu transaksi penyesuaian agar total saldo menjadi 0.<br/>
           • <strong>Kosongkan Riwayat</strong>: menghapus semua transaksi di ledger (tidak dapat dibatalkan).
         </p>
       </div>
@@ -162,13 +158,11 @@ export default function AdminDashboardPage() {
           <span>Riwayat Transaksi Terbaru</span>
           <button onClick={fetchSummary} className="text-sm underline">Refresh</button>
         </div>
-
         {loading && <div className="p-4">Memuat…</div>}
         {err && <div className="p-4 text-red-600">❌ {err}</div>}
         {!loading && !err && (sum?.recent?.length ?? 0) === 0 && (
           <div className="p-4 text-sm text-gray-500">Belum ada transaksi.</div>
         )}
-
         <div className="divide-y">
           {sum?.recent?.map((t, i) => (
             <div key={i} className="p-4 flex items-center justify-between">
