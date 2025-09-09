@@ -9,6 +9,7 @@ type ProofRow = {
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
   user_id: string
   amount: number | null
+  proof_url: string | null
 }
 
 const rupiah = (n: number) =>
@@ -28,23 +29,16 @@ export default function AdminVerifikasiPage() {
     setErr(null)
 
     const { data: s } = await supabase.auth.getSession()
-    if (!s.session) {
-      router.replace('/login')
-      return
-    }
+    if (!s.session) { router.replace('/login'); return }
 
     const { data, error } = await supabase
       .from('payment_proofs')
-      .select('id, created_at, status, user_id, amount')
+      .select('id, created_at, status, user_id, amount, proof_url')
       .eq('status', 'PENDING')
       .order('created_at', { ascending: false })
       .limit(100)
 
-    if (error) {
-      setErr(error.message)
-      setLoading(false)
-      return
-    }
+    if (error) { setErr(error.message); setLoading(false); return }
 
     setItems((data ?? []) as ProofRow[])
     setLoading(false)
@@ -64,29 +58,20 @@ export default function AdminVerifikasiPage() {
       if (existingAmount === null) {
         const raw = fallbackAmount[id]
         const a = Number(raw?.replace(/\D+/g, ''))
-        if (!Number.isFinite(a) || a <= 0) {
-          alert('Masukkan nominal fallback (> 0).')
-          return
-        }
+        if (!Number.isFinite(a) || a <= 0) { alert('Masukkan nominal fallback (> 0).'); return }
         bodyString = JSON.stringify({ amount: a })
         headers = { 'Content-Type': 'application/json' }
       }
 
-      const r = await fetch(`/api/proofs/${id}/approve`, {
-        method: 'POST',
-        headers,
-        body: bodyString,
-      })
+      const r = await fetch(`/api/proofs/${id}/approve`, { method: 'POST', headers, body: bodyString })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || (j && (j as { error?: string }).error)) {
-        const msg = (j as { error?: string }).error ?? 'Gagal approve'
-        throw new Error(msg)
+        throw new Error((j as { error?: string }).error ?? 'Gagal approve')
       }
       await fetchPending()
       alert('Berhasil disetujui ✅')
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'approve'
-      alert('Gagal: ' + msg)
+      alert('Gagal: ' + (e instanceof Error ? e.message : 'approve'))
     }
   }
 
@@ -95,14 +80,12 @@ export default function AdminVerifikasiPage() {
       const r = await fetch(`/api/proofs/${id}/reject`, { method: 'POST' })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || (j && (j as { error?: string }).error)) {
-        const msg = (j as { error?: string }).error ?? 'Gagal reject'
-        throw new Error(msg)
+        throw new Error((j as { error?: string }).error ?? 'Gagal reject')
       }
       await fetchPending()
       alert('Ditolak ❌')
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'reject'
-      alert('Gagal: ' + msg)
+      alert('Gagal: ' + (e instanceof Error ? e.message : 'reject'))
     }
   }
 
@@ -121,18 +104,19 @@ export default function AdminVerifikasiPage() {
       {!loading && !err && items.length === 0 && <div className="text-sm text-gray-500">Tidak ada bukti PENDING.</div>}
 
       <div className="rounded-2xl border overflow-hidden">
-        <div className="hidden md:grid grid-cols-6 gap-2 px-4 py-2 border-b text-sm font-medium bg-gray-50 dark:bg-gray-800">
+        <div className="hidden md:grid grid-cols-7 gap-2 px-4 py-2 border-b text-sm font-medium bg-gray-50 dark:bg-gray-800">
           <div>Tanggal</div>
           <div>User</div>
           <div>Nominal</div>
           <div className="text-center">Status</div>
           <div className="text-center">Bukti</div>
+          <div className="text-center">Link</div>
           <div className="text-right pr-2">Aksi</div>
         </div>
 
         <ul className="divide-y">
           {items.map((p) => (
-            <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-center">
+            <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-7 gap-2 items-center">
               <div className="text-sm text-gray-600">{new Date(p.created_at).toLocaleString('id-ID')}</div>
               <div className="text-sm break-all">{p.user_id}</div>
               <div className="font-semibold">
@@ -156,7 +140,18 @@ export default function AdminVerifikasiPage() {
               <div className="text-center">
                 <span className="rounded-full px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-700">{p.status}</span>
               </div>
-              <div className="text-center text-xs text-gray-400">—</div>
+              <div className="text-center">
+                {p.proof_url
+                  ? <img src={p.proof_url} alt="bukti" className="inline-block h-12 w-12 object-cover rounded" />
+                  : <span className="text-xs text-gray-400">—</span>
+                }
+              </div>
+              <div className="text-center">
+                {p.proof_url
+                  ? <a href={p.proof_url} target="_blank" className="text-blue-600 underline text-xs">Buka</a>
+                  : <span className="text-xs text-gray-400">—</span>
+                }
+              </div>
               <div className="flex md:justify-end gap-2">
                 <button
                   onClick={() => approve(p.id, p.amount)}
@@ -176,7 +171,7 @@ export default function AdminVerifikasiPage() {
         </ul>
       </div>
 
-      <p className="text-xs text-gray-500">Mulai sekarang, member wajib memasukkan nominal saat setor.</p>
+      <p className="text-xs text-gray-500">Pastikan nominal sesuai bukti sebelum Approve.</p>
     </div>
   )
 }

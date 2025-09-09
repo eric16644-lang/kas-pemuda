@@ -1,32 +1,64 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
 export default function SetorPage() {
   const router = useRouter()
+  const supabase = supabaseBrowser()
 
   const [amount, setAmount] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError(null)
     const a = Number(amount.replace(/\D+/g, ''))
     if (!Number.isFinite(a) || a <= 0) {
-      alert('Masukkan nominal yang benar (> 0).')
+      setError('Masukkan nominal yang benar (> 0).')
       return
     }
     setUploading(true)
 
+    // 1) (Opsional) Upload file ke Supabase Storage
+    let proof_url: string | undefined
+    if (file) {
+      const { data: s } = await supabase.auth.getSession()
+      const uid = s.session?.user.id
+      if (!uid) { setError('Anda belum login.'); setUploading(false); return }
+
+      const ext = file.name.split('.').pop() || 'jpg'
+      const path = `${uid}/${Date.now()}.${ext}`
+
+      // pastikan bucket 'bukti-transfer' sudah dibuat & public
+      const up = await supabase.storage.from('bukti-transfer').upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type || 'image/jpeg',
+      })
+      if (up.error) {
+        setError('Gagal upload bukti: ' + up.error.message)
+        setUploading(false)
+        return
+      }
+
+      const pub = supabase.storage.from('bukti-transfer').getPublicUrl(path)
+      proof_url = pub.data.publicUrl
+    }
+
+    // 2) Kirim data ke API
     const r = await fetch('/api/proofs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: a }),
+      body: JSON.stringify({ amount: a, proof_url }),
     })
     const j = await r.json().catch(() => ({}))
-    setUploading(false)
 
+    setUploading(false)
     if (!r.ok || (j && (j as { error?: string }).error)) {
-      alert('Gagal submit: ' + ((j as { error?: string }).error ?? r.statusText))
+      setError('Gagal submit: ' + ((j as { error?: string }).error ?? r.statusText))
       return
     }
 
@@ -51,7 +83,18 @@ export default function SetorPage() {
           />
         </div>
 
-        {/* Jika mau aktifkan upload bukti lagi, tambahkan blok input file & proses upload ke Storage */}
+        <div>
+          <label className="block text-sm mb-1">Bukti Transfer (gambar)</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="w-full"
+          />
+          <p className="text-xs text-gray-500 mt-1">Unggah screenshot/ foto bukti transfer.</p>
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex items-center gap-2">
           <button

@@ -21,12 +21,11 @@ export async function POST(req: NextRequest) {
   const uid = s.session?.user.id
   if (!uid) return NextResponse.json({ error: 'no-session' }, { status: 401 })
 
-  // body dari client: { amount: number, proof_url?: string }
+  // body: { amount: number, proof_url?: string }
   let body: { amount?: unknown; proof_url?: unknown } = {}
   try { body = await req.json() } catch {}
   const amount = typeof body.amount === 'number' ? body.amount : NaN
-  const proof_url =
-    typeof body.proof_url === 'string' && body.proof_url.trim().length > 0 ? body.proof_url.trim() : null
+  const proof_url = typeof body.proof_url === 'string' && body.proof_url.trim() ? body.proof_url.trim() : null
 
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: 'amount-required-positive' }, { status: 400 })
@@ -36,12 +35,10 @@ export async function POST(req: NextRequest) {
     user_id: uid,
     status: 'PENDING',
     amount,
-    // simpan URL jika kamu pakai Supabase Storage dgn public URL
-    // kalau tidak pakai URL, biarkan null
     proof_url,
   })
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // (opsional) notifikasi admin bisa ditrigger di sini (mis. insert ke notifications)
   return NextResponse.json({ ok: true }, { headers: res.headers })
 }
