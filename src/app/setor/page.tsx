@@ -5,6 +5,13 @@ import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
 type ApiResp = { ok?: boolean; error?: string }
 
+async function sha256Hex(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const hash = await crypto.subtle.digest('SHA-256', buf)
+  const bytes = new Uint8Array(hash)
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 export default function SetorPage() {
   const router = useRouter()
   const supabase = supabaseBrowser()
@@ -29,6 +36,16 @@ export default function SetorPage() {
     }
 
     setUploading(true)
+
+    // 0) Hitung checksum SHA-256 file
+    let checksum = ''
+    try {
+      checksum = await sha256Hex(file)
+    } catch {
+      setError('Gagal menghitung checksum file.')
+      setUploading(false)
+      return
+    }
 
     // 1) Upload file ke Supabase Storage (BUCKET: proofs)
     const { data: s } = await supabase.auth.getSession()
@@ -56,19 +73,15 @@ export default function SetorPage() {
     const pub = supabase.storage.from('proofs').getPublicUrl(path)
     const screenshot_url = pub.data.publicUrl
 
-    // 2) Kirim data ke API (amount_input + screenshot_url)
+    // 2) Kirim data ke API (amount_input + screenshot_url + checksum)
     const r = await fetch('/api/proofs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: a, screenshot_url }),
+      body: JSON.stringify({ amount: a, screenshot_url, checksum }),
     })
 
     let j: ApiResp | null = null
-    try {
-      j = (await r.json()) as ApiResp
-    } catch {
-      j = null
-    }
+    try { j = (await r.json()) as ApiResp } catch { j = null }
 
     setUploading(false)
 
