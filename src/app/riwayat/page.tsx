@@ -7,7 +7,6 @@ type ProofRow = {
   id: string
   created_at: string
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
-  note: string | null
 }
 
 type LedgerRow = {
@@ -36,7 +35,7 @@ export default function RiwayatPage() {
       // 1) Ambil riwayat bukti milik user
       const { data: proofs, error: e1 } = await supabase
         .from('payment_proofs')
-        .select('id, created_at, status, note')
+        .select('id, created_at, status')
         .eq('user_id', s.session.user.id)
         .order('created_at', { ascending: false })
         .limit(100)
@@ -107,7 +106,7 @@ export default function RiwayatPage() {
                 {new Date(p.created_at).toLocaleString('id-ID')}
               </div>
               <div className="sm:col-span-2 text-sm">
-                {p.note || 'Setoran kas'}
+                Setoran kas
               </div>
               <div className="font-semibold">{renderAmount(p)}</div>
               <div>
