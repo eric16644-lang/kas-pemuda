@@ -8,7 +8,11 @@ type ProofRow = {
   created_at: string
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
   user_id: string
+  amount: number | null
 }
+
+const rupiah = (n: number) =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 
 export default function AdminVerifikasiPage() {
   const router = useRouter()
@@ -17,8 +21,7 @@ export default function AdminVerifikasiPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [items, setItems] = useState<ProofRow[]>([])
-  // simpan nominal per proofId
-  const [amountMap, setAmountMap] = useState<Record<string, string>>({})
+  const [fallbackAmount, setFallbackAmount] = useState<Record<string, string>>({})
 
   const fetchPending = useCallback(async () => {
     setLoading(true)
@@ -32,7 +35,7 @@ export default function AdminVerifikasiPage() {
 
     const { data, error } = await supabase
       .from('payment_proofs')
-      .select('id, created_at, status, user_id')
+      .select('id, created_at, status, user_id, amount')
       .eq('status', 'PENDING')
       .order('created_at', { ascending: false })
       .limit(100)
@@ -49,22 +52,23 @@ export default function AdminVerifikasiPage() {
 
   useEffect(() => { fetchPending() }, [fetchPending])
 
-  function onChangeAmount(id: string, v: string) {
-    setAmountMap((m) => ({ ...m, [id]: v }))
+  function onChangeFallback(id: string, v: string) {
+    setFallbackAmount((m) => ({ ...m, [id]: v }))
   }
 
-  async function approve(id: string) {
+  async function approve(id: string, existingAmount: number | null) {
     try {
-      const raw = amountMap[id]
-      const amount = Number(raw?.replace(/\D+/g, '')) // ambil angka saja
-      if (!Number.isFinite(amount) || amount <= 0) {
-        alert('Masukkan nominal (IDR) yang benar (> 0).')
-        return
+      let body: any = undefined
+      if (existingAmount === null) {
+        const raw = fallbackAmount[id]
+        const a = Number(raw?.replace(/\D+/g, ''))
+        if (!Number.isFinite(a) || a <= 0) { alert('Masukkan nominal fallback (> 0).'); return }
+        body = JSON.stringify({ amount: a })
       }
       const r = await fetch(`/api/proofs/${id}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body,
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j?.error) throw new Error(j?.error || 'Gagal approve')
@@ -105,7 +109,7 @@ export default function AdminVerifikasiPage() {
         <div className="hidden md:grid grid-cols-6 gap-2 px-4 py-2 border-b text-sm font-medium bg-gray-50 dark:bg-gray-800">
           <div>Tanggal</div>
           <div>User</div>
-          <div>Nominal (IDR)</div>
+          <div>Nominal</div>
           <div className="text-center">Status</div>
           <div className="text-center">Bukti</div>
           <div className="text-right pr-2">Aksi</div>
@@ -116,25 +120,39 @@ export default function AdminVerifikasiPage() {
             <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-center">
               <div className="text-sm text-gray-600">{new Date(p.created_at).toLocaleString('id-ID')}</div>
               <div className="text-sm break-all">{p.user_id}</div>
-              <div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="cth: 50.000"
-                  value={amountMap[p.id] ?? ''}
-                  onChange={(e) => onChangeAmount(p.id, e.target.value)}
-                  className="w-full rounded border px-2 py-1"
-                />
+              <div className="font-semibold">
+                {typeof p.amount === 'number'
+                  ? rupiah(p.amount)
+                  : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="fallback"
+                        value={fallbackAmount[p.id] ?? ''}
+                        onChange={(e) => onChangeFallback(p.id, e.target.value)}
+                        className="w-28 rounded border px-2 py-1"
+                      />
+                      <span className="text-xs text-gray-500">← isi nominal jika kosong</span>
+                    </div>
+                  )
+                }
               </div>
               <div className="text-center">
                 <span className="rounded-full px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-700">{p.status}</span>
               </div>
               <div className="text-center text-xs text-gray-400">—</div>
               <div className="flex md:justify-end gap-2">
-                <button onClick={() => approve(p.id)} className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700">
+                <button
+                  onClick={() => approve(p.id, p.amount)}
+                  className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+                >
                   Approve
                 </button>
-                <button onClick={() => reject(p.id)} className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700">
+                <button
+                  onClick={() => reject(p.id)}
+                  className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                >
                   Reject
                 </button>
               </div>
@@ -143,7 +161,7 @@ export default function AdminVerifikasiPage() {
         </ul>
       </div>
 
-      <p className="text-xs text-gray-500">Masukkan nominal setoran sesuai bukti sebelum menekan Approve.</p>
+      <p className="text-xs text-gray-500">Mulai sekarang, member wajib memasukkan nominal saat setor.</p>
     </div>
   )
 }

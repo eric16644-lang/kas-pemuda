@@ -22,17 +22,9 @@ export async function POST(
 ) {
   const { id: proofId } = await context.params
 
-  // >>> ambil nominal dari body
+  // (opsional) fallback body untuk data lama tanpa amount
   let body: { amount?: unknown; note?: unknown } = {}
   try { body = await req.json() } catch {}
-  const amountNum = typeof body.amount === 'number' ? body.amount : NaN
-  const noteStr = typeof body.note === 'string' && body.note.trim().length > 0
-    ? body.note.trim()
-    : 'Setoran Kas telah disetujui oleh Admin'
-
-  if (!Number.isFinite(amountNum) || amountNum <= 0) {
-    return NextResponse.json({ error: 'amount-required-positive' }, { status: 400 })
-  }
 
   const res = new NextResponse()
   const supabase = createServerClient(URL, ANON, {
@@ -49,19 +41,29 @@ export async function POST(
   const adminId = s.session?.user.id
   if (!adminId) return NextResponse.json({ error: 'no-session' }, { status: 401 })
 
-  const { data: me, error: eMe } = await supabase
-    .from('users').select('role').eq('id', adminId).single()
+  const { data: me, error: eMe } = await supabase.from('users').select('role').eq('id', adminId).single()
   if (eMe) return NextResponse.json({ error: eMe.message }, { status: 500 })
   const isAdmin = me?.role === 'ADMIN' || me?.role === 'TREASURER'
   if (!isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
-  // Ambil proof
+  // Ambil proof beserta amount
   const { data: proof, error: eProof } = await supabase
     .from('payment_proofs')
-    .select('id, user_id')
+    .select('id, user_id, amount')
     .eq('id', proofId)
     .single()
   if (eProof || !proof) return NextResponse.json({ error: eProof?.message || 'proof-not-found' }, { status: 404 })
+
+  // Tentukan amount: pakai dari proof; kalau null (data lama), pakai dari body
+  let amount: number | null = typeof proof.amount === 'number' ? proof.amount : null
+  if (amount === null && typeof body.amount === 'number' && Number.isFinite(body.amount) && body.amount > 0) {
+    amount = body.amount
+    // simpan balik ke payment_proofs agar tersimpan untuk arsip
+    await supabase.from('payment_proofs').update({ amount }).eq('id', proofId)
+  }
+  if (amount === null || amount <= 0) {
+    return NextResponse.json({ error: 'amount-required-positive' }, { status: 400 })
+  }
 
   // Cek ledger existing
   const { data: existingLedger, error: eL } = await supabase
@@ -72,18 +74,14 @@ export async function POST(
   if (eL) return NextResponse.json({ error: eL.message }, { status: 500 })
 
   // Update status proof → APPROVED
-  const { error: eUpd } = await supabase
-    .from('payment_proofs')
-    .update({ status: 'APPROVED' })
-    .eq('id', proofId)
+  const { error: eUpd } = await supabase.from('payment_proofs').update({ status: 'APPROVED' }).eq('id', proofId)
   if (eUpd) return NextResponse.json({ error: eUpd.message }, { status: 500 })
 
-  // Insert/update ledger dengan amount dari body
   const payload: LedgerInsert = {
     user_id: proof.user_id,
     type: 'CREDIT',
-    amount: amountNum,
-    note: noteStr,
+    amount,
+    note: typeof body.note === 'string' && body.note.trim() ? body.note.trim() : 'Setoran Kas telah disetujui oleh Admin',
     proof_id: proofId,
     source: 'PROOF',
   }
@@ -94,7 +92,7 @@ export async function POST(
   } else {
     const { error: eUpdLed } = await supabase.from('ledger').update(payload).eq('proof_id', proofId)
     if (eUpdLed) {
-      // bisa dikembalikan error kalau mau strict
+      // non-fatal
     }
   }
 

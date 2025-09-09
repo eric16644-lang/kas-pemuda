@@ -1,71 +1,47 @@
-import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
-import { createClient } from '@supabase/supabase-js'
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { NextResponse, type NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  // Bearer token dari client
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  // Resolve user dari token
-  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  const { data: userRes, error: userErr } = await anon.auth.getUser(token)
-  if (userErr || !userRes?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const user = userRes.user
-
-  // Ambil form-data
-  const form = await req.formData()
-  const amountStr = String(form.get('amount') ?? '')
-  const transferDatetime = form.get('transferDatetime')?.toString() || null
-  const bankName = form.get('bankName')?.toString() || null
-  const accountLast4 = form.get('accountLast4')?.toString() || null
-  const file = form.get('screenshot') as File | null
-
-  // Validasi
-  const amount = Number(amountStr)
-  if (!amount || Number.isNaN(amount) || amount <= 0) {
-    return NextResponse.json({ error: 'Nominal tidak valid' }, { status: 400 })
-  }
-  if (!file) return NextResponse.json({ error: 'Screenshot wajib' }, { status: 400 })
-  if (file.size > 5 * 1024 * 1024) return NextResponse.json({ error: 'Maksimal 5MB' }, { status: 400 })
-  const allowed = ['image/jpeg', 'image/png']
-  if (!allowed.includes(file.type)) return NextResponse.json({ error: 'Format harus JPG/PNG' }, { status: 400 })
-
-  // Checksum
-  const arrayBuf = await file.arrayBuffer()
-  const buffer = Buffer.from(arrayBuf)
-  const checksum = crypto.createHash('sha256').update(buffer).digest('hex')
-
-  // Upload Storage
-  const ext = file.type === 'image/png' ? 'png' : 'jpg'
-  const objectPath = `${user.id}/${crypto.randomUUID()}.${ext}`
-
-  const admin = supabaseAdmin()
-  const { error: uploadErr } = await admin.storage
-    .from('proofs')
-    .upload(objectPath, buffer, { contentType: file.type, upsert: false })
-  if (uploadErr) return NextResponse.json({ error: `Upload gagal: ${uploadErr.message}` }, { status: 500 })
-
-  // Insert DB
-  const { error: insertErr } = await admin.from('payment_proofs').insert({
-    user_id: user.id,
-    amount_input: amount,
-    transfer_datetime: transferDatetime,
-    bank_name: bankName,
-    account_last4: accountLast4,
-    screenshot_url: objectPath,
-    checksum,
-    status: 'PENDING'
+  const res = new NextResponse()
+  const supabase = createServerClient(URL, ANON, {
+    cookies: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      getAll() { return (req.cookies.getAll() as any[]).map(({ name, value }: any) => ({ name, value })) },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setAll(cookies: any[]) { cookies.forEach(({ name, value, options }) => res.cookies.set(name, value, options)) },
+    },
   })
-  if (insertErr) {
-    await admin.storage.from('proofs').remove([objectPath])
-    return NextResponse.json({ error: `DB insert gagal: ${insertErr.message}` }, { status: 500 })
+
+  const { data: s } = await supabase.auth.getSession()
+  const uid = s.session?.user.id
+  if (!uid) return NextResponse.json({ error: 'no-session' }, { status: 401 })
+
+  // body dari client: { amount: number, proof_url?: string }
+  let body: { amount?: unknown; proof_url?: unknown } = {}
+  try { body = await req.json() } catch {}
+  const amount = typeof body.amount === 'number' ? body.amount : NaN
+  const proof_url =
+    typeof body.proof_url === 'string' && body.proof_url.trim().length > 0 ? body.proof_url.trim() : null
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return NextResponse.json({ error: 'amount-required-positive' }, { status: 400 })
   }
 
-  return NextResponse.json({ ok: true, message: 'Bukti dikirim, menunggu verifikasi.' })
+  const { error } = await supabase.from('payment_proofs').insert({
+    user_id: uid,
+    status: 'PENDING',
+    amount,
+    // simpan URL jika kamu pakai Supabase Storage dgn public URL
+    // kalau tidak pakai URL, biarkan null
+    proof_url,
+  })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // (opsional) notifikasi admin bisa ditrigger di sini (mis. insert ke notifications)
+  return NextResponse.json({ ok: true }, { headers: res.headers })
 }
