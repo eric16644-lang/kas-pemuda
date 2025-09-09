@@ -4,11 +4,11 @@ import { createServerClient } from '@supabase/ssr'
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const dynamic = 'force-dynamic' // jaga-jaga agar tidak di-cache
+export const dynamic = 'force-dynamic'
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> } // ← Next.js 15: params adalah Promise
+  context: { params: Promise<{ id: string }> }
 ) {
   const { id: proofId } = await context.params
 
@@ -22,21 +22,18 @@ export async function POST(
     },
   })
 
-  // 1) Auth & role
+  // Auth & role
   const { data: s } = await supabase.auth.getSession()
   const adminId = s.session?.user.id
   if (!adminId) return NextResponse.json({ error: 'no-session' }, { status: 401 })
 
   const { data: me, error: eMe } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', adminId)
-    .single()
+    .from('users').select('role').eq('id', adminId).single()
   if (eMe) return NextResponse.json({ error: eMe.message }, { status: 500 })
   const isAdmin = me?.role === 'ADMIN' || me?.role === 'TREASURER'
   if (!isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
-  // 2) Ambil proof (tanpa kolom opsional)
+  // Ambil proof
   const { data: proof, error: eProof } = await supabase
     .from('payment_proofs')
     .select('id, user_id')
@@ -46,7 +43,7 @@ export async function POST(
     return NextResponse.json({ error: eProof?.message || 'proof-not-found' }, { status: 404 })
   }
 
-  // 3) Cek ledger existing
+  // Cek ledger existing
   const { data: existingLedger, error: eL } = await supabase
     .from('ledger')
     .select('id')
@@ -54,20 +51,20 @@ export async function POST(
     .limit(1)
   if (eL) return NextResponse.json({ error: eL.message }, { status: 500 })
 
-  // 4) Update status proof → APPROVED
+  // Update status proof → APPROVED
   const { error: eUpd } = await supabase
     .from('payment_proofs')
     .update({ status: 'APPROVED' })
     .eq('id', proofId)
   if (eUpd) return NextResponse.json({ error: eUpd.message }, { status: 500 })
 
-  // 5) Insert/update ledger (amount default 0 jika belum ada sumber nominal)
+  // Insert/update ledger — gunakan kolom `type` (bukan `kind`)
   const amount = 0
 
   if (!existingLedger || existingLedger.length === 0) {
     const { error: eIns } = await supabase.from('ledger').insert({
       user_id: proof.user_id,
-      kind: 'CREDIT',
+      type: 'CREDIT',                      // ← penting
       amount,
       note: 'Setoran Kas telah disetujui oleh Admin',
       proof_id: proofId,
@@ -76,10 +73,10 @@ export async function POST(
   } else {
     const { error: eUpdLed } = await supabase
       .from('ledger')
-      .update({ note: 'Setoran Kas telah disetujui oleh Admin', kind: 'CREDIT' })
+      .update({ note: 'Setoran Kas telah disetujui oleh Admin', type: 'CREDIT' })
       .eq('proof_id', proofId)
     if (eUpdLed) {
-      // non-fatal; bisa di-return jika ingin strict
+      // non-fatal; abaikan atau kembalikan error jika mau strict
     }
   }
 
