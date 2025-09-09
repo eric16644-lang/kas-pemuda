@@ -29,19 +29,22 @@ export async function POST(req: NextRequest) {
 
   const svc = createClient(URL, SERVICE)
 
-  // Hitung saldo saat ini
-  const { data: agg, error: aggErr } = await svc
-    .from('ledger')
-    .select('amount, kind')
-  if (aggErr) return NextResponse.json({ error: aggErr.message }, { status: 500 })
+  // Hitung saldo saat ini (tiping data agar tidak pakai any)
+type Row = { amount: number; kind: 'CREDIT' | 'DEBIT' }
 
-  const balance = (agg ?? []).reduce((acc, row: any) => {
-    return acc + (row.kind === 'CREDIT' ? Number(row.amount) : -Number(row.amount))
-  }, 0)
+const { data: agg, error: aggErr } = await svc
+  .from('ledger')
+  .select('amount, kind')
 
-  if (!balance) {
-    return NextResponse.json({ ok: true, note: 'saldo sudah 0' }, { headers: res.headers })
-  }
+if (aggErr) {
+  return NextResponse.json({ error: aggErr.message }, { status: 500 })
+}
+
+const rows = (agg as Row[]) ?? []
+const balance = rows.reduce((acc, row) => {
+  return acc + (row.kind === 'CREDIT' ? Number(row.amount) : -Number(row.amount))
+}, 0)
+
 
   // Masukkan entry penyesuaian kebalikan saldo agar total jadi 0
   const adjustKind = balance > 0 ? 'DEBIT' : 'CREDIT'

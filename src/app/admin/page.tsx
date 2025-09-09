@@ -46,8 +46,6 @@ export default function AdminDashboardPage() {
 
   useEffect(() => { void fetchSummary() }, [])
 
-  const recent = useMemo(() => sum?.recent ?? [], [sum])
-
   const onLogout = async () => {
     await supabase.auth.signOut()
     router.replace('/login')
