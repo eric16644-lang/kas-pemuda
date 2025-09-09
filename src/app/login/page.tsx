@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
@@ -11,33 +11,27 @@ export default function LoginPage() {
   const [msg, setMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Kalau sudah login, arahkan ke halaman sesuai role
-  useEffect(() => {
-    ;(async () => {
-      const { data } = await supabase.auth.getSession()
-      if (data.session) {
-        await redirectByRole()
-      }
-    })()
-  }, [])
-
-  const redirectByRole = async () => {
+  const redirectByRole = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-
-    // Ambil role dari tabel users
     const { data: profile } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single()
-
     if (profile?.role === 'ADMIN' || profile?.role === 'TREASURER') {
       router.replace('/admin')
     } else {
       router.replace('/kas')
     }
-  }
+  }, [router, supabase])
+
+  useEffect(() => {
+    ;(async () => {
+      const { data } = await supabase.auth.getSession()
+      if (data.session) await redirectByRole()
+    })()
+  }, [redirectByRole, supabase])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,31 +39,18 @@ export default function LoginPage() {
     setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
-
-    if (error) {
-      setMsg(`❌ ${error.message}`)
-    } else {
-      await redirectByRole() // ✅ arahkan sesuai role
-    }
+    if (error) setMsg(`❌ ${error.message}`)
+    else await redirectByRole()
   }
 
   return (
     <div className="max-w-sm mx-auto p-6">
       <h1 className="text-xl font-semibold mb-4">Login</h1>
       <form onSubmit={onSubmit} className="space-y-3">
-        <input
-          className="w-full border p-2 rounded"
-          placeholder="email"
-          value={email}
-          onChange={(e)=>setEmail(e.target.value)}
-        />
-        <input
-          className="w-full border p-2 rounded"
-          type="password"
-          placeholder="password"
-          value={password}
-          onChange={(e)=>setPassword(e.target.value)}
-        />
+        <input className="w-full border p-2 rounded" placeholder="email"
+               value={email} onChange={(e)=>setEmail(e.target.value)} />
+        <input className="w-full border p-2 rounded" type="password" placeholder="password"
+               value={password} onChange={(e)=>setPassword(e.target.value)} />
         <button className="bg-black text-white px-4 py-2 rounded" type="submit" disabled={loading}>
           {loading ? 'Masuk…' : 'Login'}
         </button>
