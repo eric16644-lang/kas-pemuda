@@ -58,24 +58,35 @@ export default function AdminVerifikasiPage() {
 
   async function approve(id: string, existingAmount: number | null) {
     try {
-      let body: any = undefined
+      let bodyString: string | undefined
+      let headers: HeadersInit | undefined
+
       if (existingAmount === null) {
         const raw = fallbackAmount[id]
         const a = Number(raw?.replace(/\D+/g, ''))
-        if (!Number.isFinite(a) || a <= 0) { alert('Masukkan nominal fallback (> 0).'); return }
-        body = JSON.stringify({ amount: a })
+        if (!Number.isFinite(a) || a <= 0) {
+          alert('Masukkan nominal fallback (> 0).')
+          return
+        }
+        bodyString = JSON.stringify({ amount: a })
+        headers = { 'Content-Type': 'application/json' }
       }
+
       const r = await fetch(`/api/proofs/${id}/approve`, {
         method: 'POST',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body,
+        headers,
+        body: bodyString,
       })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok || j?.error) throw new Error(j?.error || 'Gagal approve')
+      if (!r.ok || (j && (j as { error?: string }).error)) {
+        const msg = (j as { error?: string }).error ?? 'Gagal approve'
+        throw new Error(msg)
+      }
       await fetchPending()
       alert('Berhasil disetujui ✅')
-    } catch (e: unknown) {
-      alert('Gagal: ' + (e instanceof Error ? e.message : 'approve'))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'approve'
+      alert('Gagal: ' + msg)
     }
   }
 
@@ -83,11 +94,15 @@ export default function AdminVerifikasiPage() {
     try {
       const r = await fetch(`/api/proofs/${id}/reject`, { method: 'POST' })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok || j?.error) throw new Error(j?.error || 'Gagal reject')
+      if (!r.ok || (j && (j as { error?: string }).error)) {
+        const msg = (j as { error?: string }).error ?? 'Gagal reject'
+        throw new Error(msg)
+      }
       await fetchPending()
       alert('Ditolak ❌')
-    } catch (e: unknown) {
-      alert('Gagal: ' + (e instanceof Error ? e.message : 'reject'))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'reject'
+      alert('Gagal: ' + msg)
     }
   }
 
