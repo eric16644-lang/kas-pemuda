@@ -13,7 +13,7 @@ interface LedgerInsert {
   amount: number
   note?: string | null
   proof_id?: string | null
-  source: 'PROOF' // gunakan enum yang sudah kamu tambahkan
+  source: 'PROOF'
 }
 
 export async function POST(
@@ -21,6 +21,18 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id: proofId } = await context.params
+
+  // >>> ambil nominal dari body
+  let body: { amount?: unknown; note?: unknown } = {}
+  try { body = await req.json() } catch {}
+  const amountNum = typeof body.amount === 'number' ? body.amount : NaN
+  const noteStr = typeof body.note === 'string' && body.note.trim().length > 0
+    ? body.note.trim()
+    : 'Setoran Kas telah disetujui oleh Admin'
+
+  if (!Number.isFinite(amountNum) || amountNum <= 0) {
+    return NextResponse.json({ error: 'amount-required-positive' }, { status: 400 })
+  }
 
   const res = new NextResponse()
   const supabase = createServerClient(URL, ANON, {
@@ -49,9 +61,7 @@ export async function POST(
     .select('id, user_id')
     .eq('id', proofId)
     .single()
-  if (eProof || !proof) {
-    return NextResponse.json({ error: eProof?.message || 'proof-not-found' }, { status: 404 })
-  }
+  if (eProof || !proof) return NextResponse.json({ error: eProof?.message || 'proof-not-found' }, { status: 404 })
 
   // Cek ledger existing
   const { data: existingLedger, error: eL } = await supabase
@@ -68,12 +78,12 @@ export async function POST(
     .eq('id', proofId)
   if (eUpd) return NextResponse.json({ error: eUpd.message }, { status: 500 })
 
-  // Insert / update ledger
+  // Insert/update ledger dengan amount dari body
   const payload: LedgerInsert = {
     user_id: proof.user_id,
     type: 'CREDIT',
-    amount: 0,
-    note: 'Setoran Kas telah disetujui oleh Admin',
+    amount: amountNum,
+    note: noteStr,
     proof_id: proofId,
     source: 'PROOF',
   }
@@ -82,12 +92,9 @@ export async function POST(
     const { error: eIns } = await supabase.from('ledger').insert(payload)
     if (eIns) return NextResponse.json({ error: eIns.message }, { status: 500 })
   } else {
-    const { error: eUpdLed } = await supabase
-      .from('ledger')
-      .update(payload)
-      .eq('proof_id', proofId)
+    const { error: eUpdLed } = await supabase.from('ledger').update(payload).eq('proof_id', proofId)
     if (eUpdLed) {
-      // non-fatal; kalau mau strict bisa return error
+      // bisa dikembalikan error kalau mau strict
     }
   }
 
