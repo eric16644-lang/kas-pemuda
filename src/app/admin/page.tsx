@@ -1,7 +1,7 @@
 // src/app/admin/page.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
@@ -87,6 +87,13 @@ export default function AdminDashboardPage() {
             className="px-4 py-2 rounded bg-green-600 text-white"
           >
             + Setor
+          </button>
+          <button
+            onClick={() => router.push('/profile')}
+            className="px-4 py-2 rounded border"
+            title="Lihat & ubah profil"
+          >
+            Profil
           </button>
           <button
             onClick={onLogout}

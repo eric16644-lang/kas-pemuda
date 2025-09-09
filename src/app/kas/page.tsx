@@ -68,6 +68,13 @@ export default function KasPublikPage() {
             + Setor
           </button>
           <button
+            onClick={() => router.push('/profile')}
+            className="px-4 py-2 rounded border"
+            title="Lihat & ubah profil"
+          >
+            Profil
+          </button>
+          <button
             onClick={onLogout}
             className="px-4 py-2 rounded border"
             title="Keluar dari akun"

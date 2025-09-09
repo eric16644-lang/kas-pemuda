@@ -5,36 +5,21 @@ import { createServerClient } from '@supabase/ssr'
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-type CookieSameSite = 'lax' | 'strict' | 'none'
-interface CookieOptions {
-  path?: string
-  domain?: string
-  maxAge?: number
-  expires?: Date
-  httpOnly?: boolean
-  secure?: boolean
-  sameSite?: CookieSameSite
-}
-
 type Role = 'ADMIN' | 'TREASURER' | 'MEMBER'
 
 async function getSessionAndRole(req: NextRequest) {
   const res = NextResponse.next()
 
-  // ✅ Versi cookies untuk @supabase/ssr terbaru: getAll / setAll
+  // Versi cookies untuk @supabase/ssr terbaru: getAll / setAll
   const supabase = createServerClient(URL, ANON, {
     cookies: {
       getAll() {
-        // NextRequest.cookies.getAll() -> { name, value }[]
         return req.cookies.getAll().map(({ name, value }) => ({ name, value }))
       },
       setAll(cookies) {
-        // sinkronkan cookie refresh dari Supabase ke response
-        ;(cookies as Array<{ name: string; value: string; options?: CookieOptions }>).forEach(
-          ({ name, value, options }) => {
-            res.cookies.set(name, value, options)
-          }
-        )
+        cookies.forEach(({ name, value, options }) => {
+          res.cookies.set(name, value, options)
+        })
       },
     },
   })
@@ -86,6 +71,16 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
+  // /profile → wajib login
+  if (pathname.startsWith('/profile')) {
+    if (!user) {
+      const url = req.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+    return res
+  }
+
   // /login → kalau sudah login, arahkan sesuai role
   if (pathname === '/login') {
     if (user) {
@@ -101,5 +96,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/login', '/setor', '/admin/:path*'],
+  matcher: ['/', '/login', '/setor', '/profile', '/admin/:path*'],
 }
