@@ -22,7 +22,7 @@ export async function POST(
 ) {
   const { id: proofId } = await context.params
 
-  // (opsional) fallback body untuk data lama tanpa amount
+  // fallback body untuk data lama tanpa amount_input
   let body: { amount?: unknown; note?: unknown } = {}
   try { body = await req.json() } catch {}
 
@@ -46,20 +46,24 @@ export async function POST(
   const isAdmin = me?.role === 'ADMIN' || me?.role === 'TREASURER'
   if (!isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
-  // Ambil proof beserta amount
+  // Ambil proof beserta amount_input
   const { data: proof, error: eProof } = await supabase
     .from('payment_proofs')
-    .select('id, user_id, amount')
+    .select('id, user_id, amount_input')
     .eq('id', proofId)
     .single()
   if (eProof || !proof) return NextResponse.json({ error: eProof?.message || 'proof-not-found' }, { status: 404 })
 
-  // Tentukan amount: pakai dari proof; kalau null (data lama), pakai dari body
-  let amount: number | null = typeof proof.amount === 'number' ? proof.amount : null
+  // Tentukan amount: pakai amount_input; kalau null (data lama), coba pakai body
+  let amount: number | null =
+    typeof (proof as { amount_input?: number }).amount_input === 'number'
+      ? (proof as { amount_input: number }).amount_input
+      : null
+
   if (amount === null && typeof body.amount === 'number' && Number.isFinite(body.amount) && body.amount > 0) {
     amount = body.amount
     // simpan balik ke payment_proofs agar tersimpan untuk arsip
-    await supabase.from('payment_proofs').update({ amount }).eq('id', proofId)
+    await supabase.from('payment_proofs').update({ amount_input: amount }).eq('id', proofId)
   }
   if (amount === null || amount <= 0) {
     return NextResponse.json({ error: 'amount-required-positive' }, { status: 400 })
@@ -78,7 +82,7 @@ export async function POST(
   if (eUpd) return NextResponse.json({ error: eUpd.message }, { status: 500 })
 
   const payload: LedgerInsert = {
-    user_id: proof.user_id,
+    user_id: (proof as { user_id: string }).user_id,
     type: 'CREDIT',
     amount,
     note: typeof body.note === 'string' && body.note.trim() ? body.note.trim() : 'Setoran Kas telah disetujui oleh Admin',

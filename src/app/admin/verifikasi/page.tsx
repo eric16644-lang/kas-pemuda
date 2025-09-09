@@ -8,7 +8,7 @@ type ProofRow = {
   created_at: string
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
   user_id: string
-  amount: number | null
+  amount_input: number | null
   proof_url: string | null
 }
 
@@ -33,7 +33,7 @@ export default function AdminVerifikasiPage() {
 
     const { data, error } = await supabase
       .from('payment_proofs')
-      .select('id, created_at, status, user_id, amount, proof_url')
+      .select('id, created_at, status, user_id, amount_input, proof_url')
       .eq('status', 'PENDING')
       .order('created_at', { ascending: false })
       .limit(100)
@@ -55,6 +55,7 @@ export default function AdminVerifikasiPage() {
       let bodyString: string | undefined
       let headers: HeadersInit | undefined
 
+      // data lama yang belum punya amount_input (harusnya jarang)
       if (existingAmount === null) {
         const raw = fallbackAmount[id]
         const a = Number(raw?.replace(/\D+/g, ''))
@@ -120,8 +121,8 @@ export default function AdminVerifikasiPage() {
               <div className="text-sm text-gray-600">{new Date(p.created_at).toLocaleString('id-ID')}</div>
               <div className="text-sm break-all">{p.user_id}</div>
               <div className="font-semibold">
-                {typeof p.amount === 'number'
-                  ? rupiah(p.amount)
+                {typeof p.amount_input === 'number'
+                  ? rupiah(p.amount_input)
                   : (
                     <div className="flex items-center gap-2">
                       <input
@@ -154,7 +155,7 @@ export default function AdminVerifikasiPage() {
               </div>
               <div className="flex md:justify-end gap-2">
                 <button
-                  onClick={() => approve(p.id, p.amount)}
+                  onClick={() => approve(p.id, p.amount_input)}
                   className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
                 >
                   Approve

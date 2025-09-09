@@ -31,10 +31,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'amount-required-positive' }, { status: 400 })
   }
 
+  // ⬇️ gunakan kolom amount_input (NOT NULL) sesuai schema yang ada
   const { error } = await supabase.from('payment_proofs').insert({
     user_id: uid,
     status: 'PENDING',
-    amount,
+    amount_input: amount,
     proof_url,
   })
 
