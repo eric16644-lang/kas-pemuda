@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
+type ApiResp = { ok?: boolean; error?: string }
+
 export default function SetorPage() {
   const router = useRouter()
   const supabase = supabaseBrowser()
@@ -60,12 +62,18 @@ export default function SetorPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount: a, screenshot_url }),
     })
-    const j = await r.json().catch(() => ({} as any))
+
+    let j: ApiResp | null = null
+    try {
+      j = (await r.json()) as ApiResp
+    } catch {
+      j = null
+    }
 
     setUploading(false)
 
-    if (!r.ok || (j as { error?: string })?.error) {
-      setError('Gagal submit: ' + ((j as { error?: string })?.error ?? r.statusText))
+    if (!r.ok || (j && j.error)) {
+      setError('Gagal submit: ' + (j?.error ?? r.statusText))
       return
     }
 
