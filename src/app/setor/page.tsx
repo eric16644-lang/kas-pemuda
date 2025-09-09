@@ -15,25 +15,30 @@ export default function SetorPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
     const a = Number(amount.replace(/\D+/g, ''))
     if (!Number.isFinite(a) || a <= 0) {
       setError('Masukkan nominal yang benar (> 0).')
       return
     }
+
     setUploading(true)
 
-    // 1) (Opsional) Upload file ke Supabase Storage
+    // 1) Upload file ke Supabase Storage (BUCKET: proofs)
     let proof_url: string | undefined
     if (file) {
       const { data: s } = await supabase.auth.getSession()
       const uid = s.session?.user.id
-      if (!uid) { setError('Anda belum login.'); setUploading(false); return }
+      if (!uid) {
+        setError('Anda belum login.')
+        setUploading(false)
+        return
+      }
 
-      const ext = file.name.split('.').pop() || 'jpg'
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
       const path = `${uid}/${Date.now()}.${ext}`
 
-      // pastikan bucket 'bukti-transfer' sudah dibuat & public
-      const up = await supabase.storage.from('bukti-transfer').upload(path, file, {
+      const up = await supabase.storage.from('proofs').upload(path, file, {
         cacheControl: '3600',
         upsert: false,
         contentType: file.type || 'image/jpeg',
@@ -44,11 +49,11 @@ export default function SetorPage() {
         return
       }
 
-      const pub = supabase.storage.from('bukti-transfer').getPublicUrl(path)
+      const pub = supabase.storage.from('proofs').getPublicUrl(path)
       proof_url = pub.data.publicUrl
     }
 
-    // 2) Kirim data ke API
+    // 2) Kirim data ke API (amount wajib, proof_url opsional)
     const r = await fetch('/api/proofs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -57,8 +62,9 @@ export default function SetorPage() {
     const j = await r.json().catch(() => ({}))
 
     setUploading(false)
-    if (!r.ok || (j && (j as { error?: string }).error)) {
-      setError('Gagal submit: ' + ((j as { error?: string }).error ?? r.statusText))
+
+    if (!r.ok || (j as { error?: string })?.error) {
+      setError('Gagal submit: ' + ((j as { error?: string })?.error ?? r.statusText))
       return
     }
 
@@ -69,6 +75,7 @@ export default function SetorPage() {
   return (
     <div className="max-w-md mx-auto p-6 space-y-4">
       <h1 className="text-xl font-semibold">Setor Kas</h1>
+
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className="block text-sm mb-1">Nominal (IDR)</label>
@@ -91,7 +98,9 @@ export default function SetorPage() {
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="w-full"
           />
-          <p className="text-xs text-gray-500 mt-1">Unggah screenshot/ foto bukti transfer.</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Unggah screenshot/foto bukti transfer (opsional, tapi dianjurkan).
+          </p>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
