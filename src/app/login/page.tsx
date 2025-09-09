@@ -11,13 +11,33 @@ export default function LoginPage() {
   const [msg, setMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Jika sudah login dan buka /login, arahkan ke /kas
+  // Kalau sudah login, arahkan ke halaman sesuai role
   useEffect(() => {
     ;(async () => {
       const { data } = await supabase.auth.getSession()
-      if (data.session) router.replace('/kas')
+      if (data.session) {
+        await redirectByRole()
+      }
     })()
-  }, [router, supabase])
+  }, [])
+
+  const redirectByRole = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Ambil role dari tabel users
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role === 'ADMIN' || profile?.role === 'TREASURER') {
+      router.replace('/admin')
+    } else {
+      router.replace('/kas')
+    }
+  }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,8 +46,11 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
 
-    if (error) setMsg(`❌ ${error.message}`)
-    else router.replace('/kas') // ✅ langsung ke /kas setelah login
+    if (error) {
+      setMsg(`❌ ${error.message}`)
+    } else {
+      await redirectByRole() // ✅ arahkan sesuai role
+    }
   }
 
   return (
