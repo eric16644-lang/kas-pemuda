@@ -112,11 +112,15 @@ export default function KasPage() {
 
         <div className="divide-y">
           {recent.map((t: Tx, i: number) => {
-            // CREDIT = Setoran Kas telah disetujui oleh Admin
-            const isApprovedCredit = t.kind === 'CREDIT'
-            const line = isApprovedCredit
-              ? 'Setoran Kas telah disetujui oleh Admin'
-              : t.note || (t.kind === 'DEBIT' ? 'Pengeluaran kas' : 'Setoran kas')
+            // PRIORITAS: jika ada catatan (note) dari admin, tampilkan note itu.
+            // Kalau tidak ada note dan transaksi adalah CREDIT, tampilkan teks default "disetujui admin".
+            // Kalau DEBIT tanpa note, tampilkan "Pengeluaran kas".
+            const line =
+              t.note && t.note.trim().length > 0
+                ? t.note
+                : t.kind === 'CREDIT'
+                ? 'Setoran Kas telah disetujui oleh Admin'
+                : 'Pengeluaran kas'
 
             return (
               <div key={i} className="p-4 flex items-center justify-between">
