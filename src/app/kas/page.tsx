@@ -25,6 +25,9 @@ const rupiah = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n)
 
+// kalimat default utk setoran yang disetujui
+const APPROVED_TEXT = 'Setoran Kas telah disetujui oleh Admin'
+
 export default function KasPage() {
   const router = useRouter()
   const supabase = supabaseBrowser()
@@ -49,9 +52,12 @@ export default function KasPage() {
       const now = new Date()
       const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-      const { data, error } = await fetch(`/api/public/summary?month=${ym}`).then((r) => r.json())
-      if (error) {
-        setErr(error)
+      // penting: no-store agar tidak cache
+      const res = await fetch(`/api/public/summary?month=${ym}`, { cache: 'no-store' })
+      const { data, error } = await res.json()
+
+      if (!res.ok || error) {
+        setErr(error || 'Gagal memuat ringkasan')
         setLoading(false)
         return
       }
@@ -64,6 +70,22 @@ export default function KasPage() {
   }, [router, supabase])
 
   const empty = !loading && !err && recent.length === 0
+
+  // Tentukan teks baris transaksi:
+  // - Jika ada note: jika mengandung "setoran kas disetujui" (case-insensitive) → pakai APPROVED_TEXT
+  //   selain itu pakai note apa adanya.
+  // - Jika tidak ada note:
+  //   - CREDIT → APPROVED_TEXT
+  //   - DEBIT → "Pengeluaran kas"
+  function lineText(t: Tx) {
+    const raw = (t.note ?? '').trim()
+    if (raw) {
+      const norm = raw.toLowerCase()
+      if (norm.includes('setoran kas disetujui')) return APPROVED_TEXT
+      return raw
+    }
+    return t.kind === 'CREDIT' ? APPROVED_TEXT : 'Pengeluaran kas'
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
@@ -112,16 +134,7 @@ export default function KasPage() {
 
         <div className="divide-y">
           {recent.map((t: Tx, i: number) => {
-            // PRIORITAS: jika ada catatan (note) dari admin, tampilkan note itu.
-            // Kalau tidak ada note dan transaksi adalah CREDIT, tampilkan teks default "disetujui admin".
-            // Kalau DEBIT tanpa note, tampilkan "Pengeluaran kas".
-            const line =
-              t.note && t.note.trim().length > 0
-                ? t.note
-                : t.kind === 'CREDIT'
-                ? 'Setoran Kas telah disetujui oleh Admin'
-                : 'Pengeluaran kas'
-
+            const line = lineText(t)
             return (
               <div key={i} className="p-4 flex items-center justify-between">
                 <div>
@@ -131,9 +144,7 @@ export default function KasPage() {
                   <div className="text-sm">{line}</div>
                 </div>
                 <div
-                  className={`font-semibold ${
-                    t.kind === 'CREDIT' ? 'text-green-700' : 'text-red-700'
-                  }`}
+                  className={`font-semibold ${t.kind === 'CREDIT' ? 'text-green-700' : 'text-red-700'}`}
                 >
                   {t.kind === 'CREDIT' ? '+' : '-'} {rupiah(Number(t.amount))}
                 </div>
