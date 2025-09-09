@@ -13,7 +13,7 @@ interface LedgerInsert {
   amount: number
   note?: string | null
   proof_id?: string | null
-  source: string
+  source: 'PROOF' // gunakan enum yang sudah kamu tambahkan
 }
 
 export async function POST(
@@ -68,14 +68,14 @@ export async function POST(
     .eq('id', proofId)
   if (eUpd) return NextResponse.json({ error: eUpd.message }, { status: 500 })
 
-  // Insert / update ledger — isi kolom NOT NULL: type + source
+  // Insert / update ledger
   const payload: LedgerInsert = {
     user_id: proof.user_id,
     type: 'CREDIT',
     amount: 0,
     note: 'Setoran Kas telah disetujui oleh Admin',
     proof_id: proofId,
-    source: 'MANUAL', // <<< pakai enum yang sudah ada
+    source: 'PROOF',
   }
 
   if (!existingLedger || existingLedger.length === 0) {
@@ -87,7 +87,7 @@ export async function POST(
       .update(payload)
       .eq('proof_id', proofId)
     if (eUpdLed) {
-      // kalau mau strict: return NextResponse.json({ error: eUpdLed.message }, { status: 500 })
+      // non-fatal; kalau mau strict bisa return error
     }
   }
 
