@@ -88,6 +88,13 @@ export default function AdminDashboardPage() {
     Verifikasi
   </button>
 
+  <button
+  onClick={() => router.push('/admin/requests')}
+  className="px-4 py-2 rounded border"
+>
+  Requests Akun
+</button>
+
   {/* Setor manual (tetap ke /setor sesuai flow lama) */}
   <button
     onClick={() => router.push('/setor')}

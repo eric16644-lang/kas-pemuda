@@ -11,8 +11,8 @@ export default function RequestPage() {
   const router = useRouter()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
-  const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -22,8 +22,8 @@ export default function RequestPage() {
     setLoading(true)
 
     const { error } = await supabase
-      .from('requests') // pastikan sudah buat tabel `requests`
-      .insert([{ full_name: fullName, email, whatsapp, reason }])
+      .from('requests')
+      .insert([{ full_name: fullName, email, password, whatsapp }])
 
     if (error) {
       setMsg('❌ Gagal submit: ' + error.message)
@@ -31,8 +31,8 @@ export default function RequestPage() {
       setMsg('✅ Request berhasil dikirim. Admin akan menghubungi Anda.')
       setFullName('')
       setEmail('')
+      setPassword('')
       setWhatsapp('')
-      setReason('')
     }
     setLoading(false)
   }
@@ -61,23 +61,26 @@ export default function RequestPage() {
           />
         </div>
         <div>
-          <label className="block text-sm mb-1">Nomor WhatsApp (opsional)</label>
+          <label className="block text-sm mb-1">Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="w-full rounded border px-3 py-2"
+          />
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Nomor WhatsApp</label>
           <input
             value={whatsapp}
             onChange={(e) => setWhatsapp(e.target.value)}
             className="w-full rounded border px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm mb-1">Alasan / Catatan</label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={3}
-            className="w-full rounded border px-3 py-2"
-          />
-        </div>
+
         {msg && <div className="text-sm">{msg}</div>}
+
         <div className="flex items-center gap-2">
           <button
             type="submit"
