@@ -3,6 +3,45 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
+const supabase = supabaseBrowser()
+
+async function toSignedUrlFromStored(stored: string | null | undefined): Promise<string | null> {
+  if (!stored) return null
+
+  // 1) Ambil path objek di bucket 'proofs'
+  //    - Jika tersimpan full URL public:  https://.../storage/v1/object/public/proofs/<PATH>
+  //    - Jika tersimpan path relatif:     <PATH> (mis. "userId/123.jpg")
+  let path = stored
+
+  // Jika berupa URL penuh, coba ambil bagian setelah '/object/' lalu buang prefix 'public/proofs/'
+  try {
+    if (/^https?:\/\//i.test(stored)) {
+      const u = new URL(stored)
+      // contoh pathname: /storage/v1/object/public/proofs/uid/123.jpg
+      const idx = u.pathname.indexOf('/object/')
+      if (idx >= 0) {
+        const after = u.pathname.slice(idx + '/object/'.length) // "public/proofs/uid/123.jpg"
+        // buang "public/proofs/" jika ada
+        path = after.replace(/^public\/proofs\//, '')
+      }
+    }
+  } catch {
+    // abaikan jika URL parsing gagal; anggap stored sudah path
+  }
+
+  // 2) Buat signed URL 1 jam
+  const { data, error } = await supabase.storage
+    .from('proofs')
+    .createSignedUrl(path, 60 * 60) // 1 jam
+
+  if (error) {
+    console.error('createSignedUrl error:', error.message)
+    return null
+  }
+  return data?.signedUrl ?? null
+}
+
+
 type ProofRow = {
   id: string
   created_at: string
@@ -10,6 +49,7 @@ type ProofRow = {
   user_id: string
   amount_input: number | null
   screenshot_url: string | null
+  signedUrl?: string | null
 }
 
 const rupiah = (n: number) =>
@@ -40,8 +80,16 @@ export default function AdminVerifikasiPage() {
 
     if (error) { setErr(error.message); setLoading(false); return }
 
-    setItems((data ?? []) as ProofRow[])
-    setLoading(false)
+// Buat signed URL untuk setiap baris
+const rows = (data ?? []) as ProofRow[]
+const withSigned = await Promise.all(
+  rows.map(async (r) => ({ ...r, signedUrl: await toSignedUrlFromStored(r.screenshot_url) }))
+)
+
+setItems(withSigned)
+setLoading(false)
+
+
   }, [router, supabase])
 
   useEffect(() => { fetchPending() }, [fetchPending])
@@ -141,16 +189,25 @@ export default function AdminVerifikasiPage() {
                 <span className="rounded-full px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-700">{p.status}</span>
               </div>
               <div className="text-center">
-                {p.screenshot_url
-                  ? <img src={p.screenshot_url} alt="bukti" className="inline-block h-12 w-12 object-cover rounded" />
-                  : <span className="text-xs text-gray-400">—</span>
-                }
+                {(p.signedUrl || p.screenshot_url)
+  ? <img src={p.signedUrl || p.screenshot_url!} alt="bukti" className="inline-block h-12 w-12 object-cover rounded" />
+  : <span className="text-xs text-gray-400">—</span>
+}
+
               </div>
               <div className="text-center">
-                {p.screenshot_url
-                  ? <a href={p.screenshot_url} target="_blank" className="text-blue-600 underline text-xs">Buka</a>
-                  : <span className="text-xs text-gray-400">—</span>
-                }
+                {(p.signedUrl || p.screenshot_url)
+  ? <a
+      href={p.signedUrl || p.screenshot_url!}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 underline text-xs"
+    >
+      Buka
+    </a>
+  : <span className="text-xs text-gray-400">—</span>
+}
+
               </div>
               <div className="flex md:justify-end gap-2">
                 <button
