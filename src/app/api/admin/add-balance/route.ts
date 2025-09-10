@@ -1,0 +1,63 @@
+import { NextResponse, type NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+export const dynamic = 'force-dynamic'
+
+type Body = { amount?: unknown; note?: unknown }
+type ApiResp = { ok?: boolean; error?: string }
+
+export async function POST(req: NextRequest) {
+  const res = new NextResponse()
+  const supabase = createServerClient(URL, ANON, {
+    cookies: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      getAll() { return (req.cookies.getAll() as any[]).map(({ name, value }: any) => ({ name, value })) },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setAll(cookies: any[]) { cookies.forEach(({ name, value, options }) => res.cookies.set(name, value, options)) },
+    },
+  })
+
+  // auth
+  const { data: s } = await supabase.auth.getSession()
+  const uid = s.session?.user.id
+  if (!uid) return NextResponse.json<ApiResp>({ error: 'no-session' }, { status: 401 })
+
+  // cek role (ADMIN / TREASURER)
+  const { data: me, error: eMe } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', uid)
+    .single()
+  if (eMe) return NextResponse.json<ApiResp>({ error: eMe.message }, { status: 500 })
+
+  const role = me?.role
+  const allowed = role === 'ADMIN' || role === 'TREASURER'
+  if (!allowed) return NextResponse.json<ApiResp>({ error: 'forbidden' }, { status: 403 })
+
+  // body
+  let body: Body = {}
+  try { body = await req.json() } catch {}
+  const amount = typeof body.amount === 'number' ? body.amount : NaN
+  const note =
+    typeof body.note === 'string' && body.note.trim() ? body.note.trim() : 'Setor manual oleh admin'
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return NextResponse.json<ApiResp>({ error: 'amount-required-positive' }, { status: 400 })
+  }
+
+  // Insert CREDIT ke ledger
+  // Catatan: untuk menghindari error enum 'source', kita tidak mengisi kolom source jika tidak yakin nilainya ada di enum.
+  const { error: eIns } = await supabase.from('ledger').insert({
+    user_id: uid,
+    type: 'CREDIT',
+    amount,
+    note,
+    // source: 'MANUAL', // <-- hanya isi jika enum ledger_source punya 'MANUAL'
+  })
+
+  if (eIns) return NextResponse.json<ApiResp>({ error: eIns.message }, { status: 500 })
+  return NextResponse.json<ApiResp>({ ok: true }, { headers: res.headers })
+}

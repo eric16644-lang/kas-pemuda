@@ -90,8 +90,16 @@ export default function AdminDashboardPage() {
     onClick={() => router.push('/setor')}
     className="px-4 py-2 rounded bg-green-600 text-white"
   >
-    + Setor Manual
+    + Setor
   </button>
+
+    <button
+    onClick={() => router.push('/admin/setor')}
+    className="px-4 py-2 rounded bg-green-600 text-white"
+  >
+    + Tambah Saldo (Admin)
+  </button>
+
 
   {/* Pengeluaran kas (admin) */}
   <button
