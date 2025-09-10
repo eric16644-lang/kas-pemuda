@@ -50,6 +50,7 @@ type ProofRow = {
   amount_input: number | null
   screenshot_url: string | null
   signedUrl?: string | null
+  users?: { full_name: string | null }
 }
 
 const rupiah = (n: number) =>
@@ -72,22 +73,58 @@ export default function AdminVerifikasiPage() {
     if (!s.session) { router.replace('/login'); return }
 
     const { data, error } = await supabase
-      .from('payment_proofs')
-      .select('id, created_at, status, user_id, amount_input, screenshot_url')
-      .eq('status', 'PENDING')
-      .order('created_at', { ascending: false })
-      .limit(100)
+  .from('payment_proofs')
+  .select(`
+    id,
+    created_at,
+    status,
+    user_id,
+    amount_input,
+    screenshot_url,
+    users ( full_name )
+  `)
+  .eq('status', 'PENDING')
+  .order('created_at', { ascending: false })
+  .limit(100)
 
-    if (error) { setErr(error.message); setLoading(false); return }
+if (error) { setErr(error.message); setLoading(false); return }
 
-// Buat signed URL untuk setiap baris
+// 1) buat daftar user_id unik
 const rows = (data ?? []) as ProofRow[]
-const withSigned = await Promise.all(
-  rows.map(async (r) => ({ ...r, signedUrl: await toSignedUrlFromStored(r.screenshot_url) }))
+const userIds = Array.from(new Set(rows.map(r => r.user_id)))
+
+// 2) ambil nama dari tabel public.users
+//    (pastikan tabel 'users' punya kolom 'name'; jika kolomnya 'full_name' ubah select di bawah)
+const { data: usersData, error: usersErr } = await supabase
+  .from('users')
+  .select('id, name')
+  .in('id', userIds)
+
+if (usersErr) {
+  console.error('fetch users error:', usersErr.message)
+}
+
+// 3) buat map id -> name
+const nameMap = new Map<string, string | null>(
+  (usersData ?? []).map((u: { id: string; name: string | null }) => [
+    u.id,
+    u.name,
+  ])
 )
 
-setItems(withSigned)
+
+// 4) lengkapi setiap baris dengan signedUrl + displayName
+const withSignedAndName = await Promise.all(
+  rows.map(async (r) => ({
+    ...r,
+    signedUrl: await toSignedUrlFromStored(r.screenshot_url),
+    displayName: nameMap.get(r.user_id) ?? r.user_id,
+  }))
+)
+
+setItems(withSignedAndName)
 setLoading(false)
+
 
 
   }, [router, supabase])
@@ -166,7 +203,9 @@ setLoading(false)
           {items.map((p) => (
             <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-7 gap-2 items-center">
               <div className="text-sm text-gray-600">{new Date(p.created_at).toLocaleString('id-ID')}</div>
-              <div className="text-sm break-all">{p.user_id}</div>
+              <div className="text-sm break-all">
+  {p.users?.full_name ?? p.user_id}
+</div>
               <div className="font-semibold">
                 {typeof p.amount_input === 'number'
                   ? rupiah(p.amount_input)
