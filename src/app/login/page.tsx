@@ -54,8 +54,18 @@ export default function LoginPage() {
         <button className="bg-black text-white px-4 py-2 rounded" type="submit" disabled={loading}>
           {loading ? 'Masuk…' : 'Login'}
         </button>
+        <div className="flex flex-col items-center gap-3 mt-4">
+  <button
+    onClick={() => router.push('/request')}
+    className="px-4 py-2 rounded border bg-gray-100 hover:bg-gray-200"
+  >
+    Request Akun Baru
+  </button>
+</div>
+
       </form>
       {msg && <p className="mt-3 text-sm">{msg}</p>}
-    </div>
+      </div>
+
   )
 }
