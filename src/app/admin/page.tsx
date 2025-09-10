@@ -123,21 +123,31 @@ export default function AdminDashboardPage() {
       {msg && <div className="text-sm">{msg}</div>}
 
       {/* Kartu ringkasan */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="rounded-2xl border p-4">
-          <div className="text-sm text-gray-500">Jumlah Setoran (Bulan Ini)</div>
-          <div className="text-3xl font-semibold text-green-700">
-            {rupiah(sum?.monthly.credit ?? 0)}
-          </div>
-          <div className="text-xs text-gray-500 mt-1">Periode: {sum?.month ?? '-'}</div>
-        </div>
-        <div className="rounded-2xl border p-4">
-          <div className="text-sm text-gray-500">Total Kas (All-time)</div>
-          <div className="text-3xl font-semibold">
-            {rupiah(sum?.total_all_time ?? 0)}
-          </div>
-        </div>
-      </div>
+<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  <div className="rounded-2xl border p-4">
+    <div className="text-sm text-gray-500">Jumlah Setoran (Bulan Ini)</div>
+    <div className="text-3xl font-semibold text-green-700">
+      {rupiah(sum?.monthly.credit ?? 0)}
+    </div>
+    <div className="text-xs text-gray-500 mt-1">Periode: {sum?.month ?? '-'}</div>
+  </div>
+
+  <div className="rounded-2xl border p-4">
+    <div className="text-sm text-gray-500">Jumlah Pengeluaran (Bulan Ini)</div>
+    <div className="text-3xl font-semibold text-red-700">
+      {rupiah(sum?.monthly.debit ?? 0)}
+    </div>
+    <div className="text-xs text-gray-500 mt-1">Periode: {sum?.month ?? '-'}</div>
+  </div>
+
+  <div className="rounded-2xl border p-4">
+    <div className="text-sm text-gray-500">Total Kas (All-time)</div>
+    <div className="text-3xl font-semibold">
+      {rupiah(sum?.total_all_time ?? 0)}
+    </div>
+  </div>
+</div>
+
 
       {/* Aksi berbahaya */}
       <div className="rounded-2xl border p-4">
