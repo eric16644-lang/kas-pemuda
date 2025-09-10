@@ -50,7 +50,7 @@ type ProofRow = {
   amount_input: number | null
   screenshot_url: string | null
   signedUrl?: string | null
-  users?: { full_name: string | null }
+  displayName?: string | null      // ← nama user hasil lookup
 }
 
 const rupiah = (n: number) =>
@@ -74,47 +74,37 @@ export default function AdminVerifikasiPage() {
 
     const { data, error } = await supabase
   .from('payment_proofs')
-  .select(`
-    id,
-    created_at,
-    status,
-    user_id,
-    amount_input,
-    screenshot_url,
-    users ( full_name )
-  `)
+  .select('id, created_at, status, user_id, amount_input, screenshot_url') // ← tidak join users
   .eq('status', 'PENDING')
   .order('created_at', { ascending: false })
   .limit(100)
 
 if (error) { setErr(error.message); setLoading(false); return }
 
-// 1) buat daftar user_id unik
 const rows = (data ?? []) as ProofRow[]
-const userIds = Array.from(new Set(rows.map(r => r.user_id)))
 
-// 2) ambil nama dari tabel public.users
-//    (pastikan tabel 'users' punya kolom 'name'; jika kolomnya 'full_name' ubah select di bawah)
-const { data: usersData, error: usersErr } = await supabase
-  .from('users')
-  .select('id, name')
-  .in('id', userIds)
+// ambil id unik
+const userIds = Array.from(new Set(rows.map(r => r.user_id))).filter(Boolean)
 
-if (usersErr) {
-  console.error('fetch users error:', usersErr.message)
+// ambil nama dari tabel public.users (kolom full_name sesuai screenshot kamu)
+let nameMap = new Map<string, string | null>()
+if (userIds.length) {
+  const { data: usersData, error: usersErr } = await supabase
+    .from('users')
+    .select('id, full_name')
+    .in('id', userIds)
+
+  if (usersErr) {
+    console.error('fetch users error:', usersErr.message)
+  } else {
+    nameMap = new Map<string, string | null>(
+      (usersData ?? []).map((u: { id: string; full_name: string | null }) => [u.id, u.full_name])
+    )
+  }
 }
 
-// 3) buat map id -> name
-const nameMap = new Map<string, string | null>(
-  (usersData ?? []).map((u: { id: string; name: string | null }) => [
-    u.id,
-    u.name,
-  ])
-)
-
-
-// 4) lengkapi setiap baris dengan signedUrl + displayName
-const withSignedAndName = await Promise.all(
+// lengkapi signedUrl + displayName
+const withSigned = await Promise.all(
   rows.map(async (r) => ({
     ...r,
     signedUrl: await toSignedUrlFromStored(r.screenshot_url),
@@ -122,10 +112,8 @@ const withSignedAndName = await Promise.all(
   }))
 )
 
-setItems(withSignedAndName)
+setItems(withSigned)
 setLoading(false)
-
-
 
   }, [router, supabase])
 
@@ -203,9 +191,7 @@ setLoading(false)
           {items.map((p) => (
             <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-7 gap-2 items-center">
               <div className="text-sm text-gray-600">{new Date(p.created_at).toLocaleString('id-ID')}</div>
-              <div className="text-sm break-all">
-  {p.users?.full_name ?? p.user_id}
-</div>
+              <div className="text-sm break-all">{p.displayName ?? p.user_id}</div>
               <div className="font-semibold">
                 {typeof p.amount_input === 'number'
                   ? rupiah(p.amount_input)
