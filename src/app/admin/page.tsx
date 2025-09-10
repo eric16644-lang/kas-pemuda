@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
+import NotificationBell from '@/components/NotificationBell'
+
 
 type Tx = { at: string; kind: 'CREDIT' | 'DEBIT'; amount: number; note: string | null }
 type Monthly = { credit: number; debit: number; net: number }
@@ -78,6 +80,7 @@ export default function AdminDashboardPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-2xl font-semibold">Dashboard Admin</h1>
         <div className="flex items-center gap-2">
+  <NotificationBell />
   <button
     onClick={() => router.push('/admin/verifikasi')}
     className="px-4 py-2 rounded bg-blue-600 text-white"
