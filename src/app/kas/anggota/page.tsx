@@ -44,6 +44,17 @@ export default function MembersPage() {
 
   const total = useMemo(() => rows.length, [rows])
 
+  const roleBadgeClass = (role: string) => {
+    switch (role) {
+      case 'ADMIN':
+        return 'bg-green-600 text-white'
+      case 'TREASURER':
+        return 'bg-orange-500 text-white'
+      default:
+        return 'bg-blue-600 text-white'
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -83,7 +94,9 @@ export default function MembersPage() {
             >
               <div className="font-medium">{m.full_name || '—'}</div>
               <div>
-                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100">
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${roleBadgeClass(m.role)}`}
+                >
                   {m.role}
                 </span>
               </div>
