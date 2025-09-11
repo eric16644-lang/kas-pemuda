@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
+import { toast } from 'sonner'
 
 type ApiResp = { ok?: boolean; error?: string }
 
@@ -32,7 +33,6 @@ export default function SetorPage() {
       : '-'
   }, [amount])
 
-  // Buat / bersihkan preview object URL
   useEffect(() => {
     if (!file) {
       if (previewUrl) {
@@ -43,25 +43,13 @@ export default function SetorPage() {
     }
     const url = URL.createObjectURL(file)
     setPreviewUrl(url)
-    return () => {
-      URL.revokeObjectURL(url)
-    }
+    return () => { URL.revokeObjectURL(url) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file])
 
-  function onPickClicked() {
-    inputRef.current?.click()
-  }
-
-  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null
-    setFile(f)
-  }
-
-  function clearFile() {
-    setFile(null)
-    if (inputRef.current) inputRef.current.value = ''
-  }
+  function onPickClicked() { inputRef.current?.click() }
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) { setFile(e.target.files?.[0] ?? null) }
+  function clearFile() { setFile(null); if (inputRef.current) inputRef.current.value = '' }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -69,35 +57,38 @@ export default function SetorPage() {
 
     const a = Number(amount.replace(/\D+/g, ''))
     if (!Number.isFinite(a) || a <= 0) {
-      setError('Masukkan nominal yang benar (> 0).')
-      return
+      const msg = 'Masukkan nominal yang benar (> 0).'
+      setError(msg); toast.error(msg); return
     }
     if (!file) {
-      setError('Bukti (screenshot) wajib diunggah.')
-      return
+      const msg = 'Bukti (screenshot) wajib diunggah.'
+      setError(msg); toast.error(msg); return
     }
 
     setUploading(true)
 
-    // 0) Hitung checksum file (wajib di schema)
+    // checksum
     let checksum = ''
     try {
       checksum = await sha256Hex(file)
     } catch {
-      setError('Gagal menghitung checksum file.')
       setUploading(false)
+      setError('Gagal menghitung checksum file.')
+      toast.error('Gagal menghitung checksum file.')
       return
     }
 
-    // 1) Upload file ke Supabase Storage (bucket: proofs)
+    // auth
     const { data: s } = await supabase.auth.getSession()
     const uid = s.session?.user.id
     if (!uid) {
-      setError('Anda belum login.')
       setUploading(false)
+      setError('Anda belum login.')
+      toast.error('Anda belum login.')
       return
     }
 
+    // upload ke bucket proofs
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
     const path = `${uid}/${Date.now()}.${ext}`
 
@@ -107,15 +98,16 @@ export default function SetorPage() {
       contentType: file.type || 'image/jpeg',
     })
     if (up.error) {
-      setError('Gagal upload bukti: ' + up.error.message)
       setUploading(false)
+      const msg = 'Gagal upload bukti: ' + up.error.message
+      setError(msg); toast.error(msg)
       return
     }
 
     const pub = supabase.storage.from('proofs').getPublicUrl(path)
     const screenshot_url = pub.data.publicUrl
 
-    // 2) Simpan request bukti ke API
+    // simpan request
     const r = await fetch('/api/proofs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -128,11 +120,11 @@ export default function SetorPage() {
     setUploading(false)
 
     if (!r.ok || (j && j.error)) {
-      setError('Gagal submit: ' + (j?.error ?? r.statusText))
-      return
+      const msg = 'Gagal submit: ' + (j?.error ?? r.statusText)
+      setError(msg); toast.error(msg); return
     }
 
-    alert('Berhasil mengirim bukti. Status: PENDING ✅')
+    toast.success('Bukti terkirim. Status: PENDING ✅')
     router.replace('/kas')
   }
 
@@ -141,7 +133,6 @@ export default function SetorPage() {
       <h1 className="text-xl font-semibold">Setor Kas</h1>
 
       <form onSubmit={onSubmit} className="space-y-5">
-        {/* Nominal */}
         <div>
           <label className="block text-sm mb-1">Nominal (IDR)</label>
           <input
@@ -156,11 +147,8 @@ export default function SetorPage() {
           <div className="text-xs text-gray-500 mt-1">Pratinjau: {rupiahPreview}</div>
         </div>
 
-        {/* File uploader dengan label DI ATAS tombol */}
         <div>
           <label className="block text-sm mb-2">Pilih Bukti Transfer (screenshot) – wajib</label>
-
-          {/* input file disembunyikan, tombol custom memicu klik */}
           <input
             ref={inputRef}
             type="file"
@@ -172,28 +160,16 @@ export default function SetorPage() {
           />
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onPickClicked}
-              className="px-4 py-2 rounded border hover:bg-gray-50"
-              disabled={uploading}
-            >
+            <button type="button" onClick={onPickClicked} className="px-4 py-2 rounded border hover:bg-gray-50" disabled={uploading}>
               {file ? 'Ganti File' : 'Pilih File'}
             </button>
-
             {file && (
-              <button
-                type="button"
-                onClick={clearFile}
-                className="px-4 py-2 rounded border text-red-700 hover:bg-red-50"
-                disabled={uploading}
-              >
+              <button type="button" onClick={clearFile} className="px-4 py-2 rounded border text-red-700 hover:bg-red-50" disabled={uploading}>
                 Hapus
               </button>
             )}
           </div>
 
-          {/* info file */}
           {file && (
             <div className="mt-2 text-xs text-gray-600">
               <div>Nama: <span className="font-medium">{file.name}</span></div>
@@ -201,38 +177,23 @@ export default function SetorPage() {
             </div>
           )}
 
-          {/* preview */}
           {previewUrl && (
             <div className="mt-3">
               <div className="text-xs text-gray-500 mb-1">Preview:</div>
-              <img
-                src={previewUrl}
-                alt="Preview bukti transfer"
-                className="w-full max-h-64 object-contain rounded border"
-              />
+              <img src={previewUrl} alt="Preview bukti transfer" className="w-full max-h-64 object-contain rounded border" />
             </div>
           )}
 
-          <p className="text-xs text-gray-500 mt-2">
-            Unggah screenshot/foto bukti transfer. Pastikan teks nominal & waktu terlihat jelas.
-          </p>
+          <p className="text-xs text-gray-500 mt-2">Unggah screenshot/foto bukti transfer. Pastikan teks nominal & waktu terlihat jelas.</p>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex items-center gap-2">
-          <button
-            disabled={uploading}
-            className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
-          >
+          <button disabled={uploading} className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
             {uploading ? 'Mengunggah…' : 'Kirim Bukti'}
           </button>
-          <button
-            type="button"
-            onClick={() => router.push('/kas')}
-            disabled={uploading}
-            className="px-4 py-2 rounded border"
-          >
+          <button type="button" onClick={() => router.push('/kas')} disabled={uploading} className="px-4 py-2 rounded border">
             Kembali
           </button>
         </div>

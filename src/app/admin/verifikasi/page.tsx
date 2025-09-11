@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
+import { toast } from 'sonner'
+
 
 const supabase = supabaseBrowser()
 
@@ -124,43 +126,44 @@ setLoading(false)
   }
 
   async function approve(id: string, existingAmount: number | null) {
-    try {
-      let bodyString: string | undefined
-      let headers: HeadersInit | undefined
+  try {
+    let bodyString: string | undefined
+    let headers: HeadersInit | undefined
 
-      if (existingAmount === null) {
-        const raw = fallbackAmount[id]
-        const a = Number(raw?.replace(/\D+/g, ''))
-        if (!Number.isFinite(a) || a <= 0) { alert('Masukkan nominal fallback (> 0).'); return }
-        bodyString = JSON.stringify({ amount: a })
-        headers = { 'Content-Type': 'application/json' }
-      }
-
-      const r = await fetch(`/api/proofs/${id}/approve`, { method: 'POST', headers, body: bodyString })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok || (j && (j as { error?: string }).error)) {
-        throw new Error((j as { error?: string }).error ?? 'Gagal approve')
-      }
-      await fetchPending()
-      alert('Berhasil disetujui ✅')
-    } catch (e) {
-      alert('Gagal: ' + (e instanceof Error ? e.message : 'approve'))
+    if (existingAmount === null) {
+      const raw = fallbackAmount[id]
+      const a = Number(raw?.replace(/\D+/g, ''))
+      if (!Number.isFinite(a) || a <= 0) { toast.error('Masukkan nominal fallback (> 0).'); return }
+      bodyString = JSON.stringify({ amount: a })
+      headers = { 'Content-Type': 'application/json' }
     }
-  }
 
-  async function reject(id: string) {
-    try {
-      const r = await fetch(`/api/proofs/${id}/reject`, { method: 'POST' })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok || (j && (j as { error?: string }).error)) {
-        throw new Error((j as { error?: string }).error ?? 'Gagal reject')
-      }
-      await fetchPending()
-      alert('Ditolak ❌')
-    } catch (e) {
-      alert('Gagal: ' + (e instanceof Error ? e.message : 'reject'))
+    const r = await fetch(`/api/proofs/${id}/approve`, { method: 'POST', headers, body: bodyString })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok || (j && (j as { error?: string }).error)) {
+      throw new Error((j as { error?: string }).error ?? 'Gagal approve')
     }
+    await fetchPending()
+    toast.success('Bukti disetujui ✅')
+  } catch (e) {
+    toast.error('Gagal: ' + (e instanceof Error ? e.message : 'approve'))
   }
+}
+
+async function reject(id: string) {
+  try {
+    const r = await fetch(`/api/proofs/${id}/reject`, { method: 'POST' })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok || (j && (j as { error?: string }).error)) {
+      throw new Error((j as { error?: string }).error ?? 'Gagal reject')
+    }
+    await fetchPending()
+    toast.success('Bukti ditolak ❌')
+  } catch (e) {
+    toast.error('Gagal: ' + (e instanceof Error ? e.message : 'reject'))
+  }
+}
+
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
