@@ -73,6 +73,19 @@ export default function AdminDashboardPage() {
       setBusy(false)
     }
   }
+  const [exportMonth, setExportMonth] = useState<string>(() => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}` // format YYYY-MM
+})
+
+function openExport() {
+  // arahkan ke API export, akan download CSV
+  const u = `/api/admin/export?month=${exportMonth}`
+  window.open(u, '_blank')
+}
+
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
@@ -95,6 +108,32 @@ export default function AdminDashboardPage() {
           >
             Requests Akun
           </button>
+
+          {/* Export CSV per bulan */}
+<div className="flex items-center gap-2 pl-2">
+  <label htmlFor="export-month" className="text-sm text-gray-600 dark:text-gray-300">
+    Export:
+  </label>
+  <input
+    id="export-month"
+    type="month"
+    value={exportMonth}
+    onChange={(e) => setExportMonth(e.target.value)}
+    className="rounded-md border px-2 py-1 text-sm bg-white dark:bg-gray-900
+               border-gray-300 dark:border-gray-700 focus:outline-none
+               focus:ring-2 focus:ring-blue-500"
+  />
+  <button
+    type="button"
+    onClick={openExport}
+    className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm
+               shadow hover:bg-indigo-700 transition"
+    title="Unduh CSV transaksi bulan terpilih"
+  >
+    Export CSV
+  </button>
+</div>
+
 
           {/* Setor manual (ke /setor sesuai flow lama) */}
           <button
@@ -127,6 +166,7 @@ export default function AdminDashboardPage() {
           >
             Logout
           </button>
+
         </div>
       </div>
 
