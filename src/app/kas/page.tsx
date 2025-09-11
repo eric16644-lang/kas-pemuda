@@ -99,6 +99,13 @@ export default function KasPage() {
           >
             + Setor
           </button>
+          <button
+  onClick={() => router.push('/kas/anggota')}
+  className="px-3 py-2 rounded border hover:bg-gray-50"
+>
+  Anggota
+</button>
+
           <UserMenu />
         </div>
       </div>
