@@ -23,7 +23,6 @@ export default function MembersPage() {
 
   useEffect(() => {
     (async () => {
-      // pastikan login
       const { data } = await supabase.auth.getSession()
       if (!data.session) {
         router.replace('/login')
@@ -54,13 +53,14 @@ export default function MembersPage() {
         </button>
       </div>
 
-      <div className="rounded-2xl border p-4">
-        <div className="text-sm text-gray-500">Jumlah Anggota yang sudah bergabung</div>
+      <div className="rounded-2xl border p-4 bg-white dark:bg-gray-900">
+        <div className="text-sm text-gray-700 dark:text-gray-300">Jumlah Anggota yang sudah bergabung</div>
         <div className="text-3xl font-semibold">{total}</div>
       </div>
 
       <div className="rounded-2xl border overflow-hidden">
-        <div className="hidden md:grid grid-cols-4 gap-2 px-4 py-2 border-b text-sm font-medium bg-gray-50">
+        {/* Header tabel */}
+        <div className="hidden md:grid grid-cols-4 gap-2 px-4 py-2 border-b text-sm font-semibold bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
           <div>Nama Anggota</div>
           <div>Role</div>
           <div className="text-center">Jumlah Setoran</div>
@@ -73,19 +73,22 @@ export default function MembersPage() {
           <div className="p-4 text-sm text-gray-500">Belum ada anggota.</div>
         )}
 
-        <ul className="divide-y">
-          {rows.map((m) => (
-            <li key={m.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+        <ul>
+          {rows.map((m, idx) => (
+            <li
+              key={m.id}
+              className={`px-4 py-3 grid grid-cols-1 md:grid-cols-4 gap-2 items-center 
+              ${idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'}
+              text-gray-900 dark:text-gray-100`}
+            >
               <div className="font-medium">{m.full_name || '—'}</div>
               <div>
-                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100">
+                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100">
                   {m.role}
                 </span>
               </div>
               <div className="text-center">{m.deposit_count}</div>
-              <div className="text-right text-sm text-gray-600">
-                {new Date(m.joined_at).toLocaleString('id-ID')}
-              </div>
+              <div className="text-right text-sm">{new Date(m.joined_at).toLocaleString('id-ID')}</div>
             </li>
           ))}
         </ul>
