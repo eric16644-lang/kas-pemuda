@@ -1,9 +1,10 @@
 // src/app/login/page.tsx
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
+import { toast } from 'sonner'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,118 +12,112 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // Jika sudah login, alihkan sesuai role
-  const redirectByRole = useCallback(
-    async (userId: string) => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', userId)
-        .maybeSingle()
-
-      if (error) {
-        // fallback ke /kas bila gagal baca role
-        router.replace('/kas')
-        return
-      }
-
-      const role = data?.role ?? 'MEMBER'
-      if (role === 'ADMIN' || role === 'TREASURER') router.replace('/admin')
-      else router.replace('/kas')
-    },
-    [router, supabase]
-  )
-
-  useEffect(() => {
-    ;(async () => {
-      const { data } = await supabase.auth.getSession()
-      const uid = data.session?.user.id
-      if (uid) await redirectByRole(uid)
-    })()
-  }, [redirectByRole, supabase])
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError(null)
+    if (!email.trim() || !password.trim()) {
+      toast.error('Email dan password wajib diisi')
+      return
+    }
+
     setLoading(true)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: password.trim(),
+    })
     setLoading(false)
 
     if (error) {
-      setError(error.message || 'Login gagal')
+      toast.error(error.message || 'Gagal masuk')
       return
     }
-    const uid = data.user?.id
-    if (uid) await redirectByRole(uid)
+
+    toast.success('Berhasil masuk')
+    // Arahkan: bila admin -> /admin, selain itu -> /kas
+    const role = (data.user?.user_metadata as any)?.role
+    router.replace(role === 'admin' ? '/admin' : '/kas')
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8 bg-neutral-100 dark:bg-neutral-900">
-      <div className="w-full max-w-5xl overflow-hidden rounded-2xl shadow-lg bg-white dark:bg-neutral-800">
-        <div className="grid grid-cols-1 md:grid-cols-2">
-          {/* LEFT: Sign in form */}
-          <div className="p-8 md:p-12">
-            <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">Sign in</h1>
+    <div className="min-h-dvh grid place-items-center bg-[var(--background)] px-4 py-6">
+      <div className="w-full max-w-sm">
+        {/* Header / brand */}
+        <div className="mb-6 text-center">
+          <h1 className="text-2xl font-bold tracking-tight">Masuk</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Selamat datang kembali ke Kas Pemuda
+          </p>
+        </div>
 
-            <form onSubmit={onSubmit} className="mt-8 space-y-5">
-              <div>
-                <label className="block text-sm text-neutral-600 dark:text-neutral-300 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="you@example.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-neutral-600 dark:text-neutral-300 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="••••••••"
-                />
-              </div>
-
-              {error && <p className="text-sm text-red-600">{error}</p>}
-
-              <button
-                disabled={loading}
-                className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-full px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-60"
-              >
-                {loading ? 'Memproses…' : 'SIGN IN'}
-              </button>
-            </form>
-          </div>
-
-          {/* RIGHT: Invitation panel */}
-          <div className="relative flex items-center justify-center p-10 md:p-12 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
-            <div className="max-w-sm text-center space-y-5">
-              <h2 className="text-3xl md:text-4xl font-extrabold drop-shadow-sm">Halo, Teman!</h2>
-              <p className="text-white/90">
-                Daftarkan diri anda dan mulai gunakan layanan kami segera
-              </p>
-              <button
-                onClick={() => router.push('/request')}
-                className="mx-auto inline-flex items-center justify-center rounded-full bg-white text-emerald-600 hover:bg-neutral-100 font-semibold px-6 py-2.5 shadow"
-                aria-label="Sign up"
-              >
-                SIGN UP
-              </button>
+        {/* Card */}
+        <div className="rounded-2xl border bg-white/70 dark:bg-gray-900/70 backdrop-blur shadow-sm p-5">
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="text-sm">Email</label>
+              <input
+                id="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="nama@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
             </div>
 
-            {/* separator on small screens (optional aesthetic) */}
-            <div className="hidden md:block absolute left-0 top-0 bottom-0 w-px bg-white/20" />
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-sm">Kata Sandi</label>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 pr-10 bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 px-3 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  aria-label={showPassword ? 'Sembunyikan sandi' : 'Tampilkan sandi'}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+
+            <button
+              disabled={loading}
+              className="w-full rounded-lg bg-blue-600 text-white py-2.5 font-medium shadow hover:bg-blue-700 disabled:opacity-60 transition"
+            >
+              {loading ? 'Memproses…' : 'Masuk'}
+            </button>
+          </form>
+
+          <div className="mt-4 text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Belum punya akun?{' '}
+              <a
+                href="/request"
+                className="font-medium text-blue-600 hover:underline"
+              >
+                Ajukan pendaftaran
+              </a>
+            </p>
           </div>
         </div>
+
+        {/* Footer kecil */}
+        <p className="mt-6 text-center text-xs text-gray-500">
+          © {new Date().getFullYear()} Kas Pemuda
+        </p>
       </div>
     </div>
   )
