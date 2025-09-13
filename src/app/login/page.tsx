@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
+type Role = 'ADMIN' | 'MEMBER' | 'WARGA'
+
 export default function LoginPage() {
   const router = useRouter()
   const supabase = supabaseBrowser()
@@ -14,13 +16,36 @@ export default function LoginPage() {
   const [password, setPassword] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(false)
 
-  // Kalau sudah login, langsung lempar ke /kas
+  async function routeByRole() {
+    const { data: s } = await supabase.auth.getSession()
+    const user = s.session?.user
+    if (!user) return
+
+    const { data: profile, error } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (error) {
+      // fallback ke /kas kalau gagal baca profile
+      router.replace('/kas')
+      return
+    }
+
+    const role = (profile?.role as Role | undefined) ?? 'MEMBER'
+    if (role === 'ADMIN') router.replace('/admin')
+    else if (role === 'WARGA') router.replace('/beranda')
+    else router.replace('/kas')
+  }
+
+  // Jika sudah login, langsung arahkan berdasar role
   useEffect(() => {
     ;(async () => {
-      const { data } = await supabase.auth.getSession()
-      if (data.session) router.replace('/kas')
+      await routeByRole()
     })()
-  }, [router, supabase])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -38,7 +63,8 @@ export default function LoginPage() {
     }
 
     toast.success('Berhasil masuk')
-    router.replace('/kas')
+    // Arahkan sesuai role
+    await routeByRole()
   }
 
   return (
@@ -62,7 +88,7 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 value={email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="nama@contoh.com"
                 required
@@ -78,7 +104,7 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 value={password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="••••••••"
                 required
@@ -94,7 +120,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Hilangkan social icons & lupa password sesuai permintaan */}
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Belum punya ID?{' '}
