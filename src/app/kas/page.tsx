@@ -1,9 +1,12 @@
+// src/app/kas/page.tsx
 'use client'
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import NotificationBell from '@/components/NotificationBell'
 import UserMenu from '@/components/UserMenu'
+import Container from '@/components/Container'
 
 type Tx = {
   at: string
@@ -25,7 +28,6 @@ const rupiah = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n)
 
-// kalimat default utk setoran yang disetujui
 const APPROVED_TEXT = 'Setoran Kas telah disetujui oleh Admin'
 
 export default function KasPage() {
@@ -52,7 +54,6 @@ export default function KasPage() {
       const now = new Date()
       const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-      // penting: no-store agar tidak cache
       const res = await fetch(`/api/public/summary?month=${ym}`, { cache: 'no-store' })
       const { data, error } = await res.json()
 
@@ -71,12 +72,6 @@ export default function KasPage() {
 
   const empty = !loading && !err && recent.length === 0
 
-  // Tentukan teks baris transaksi:
-  // - Jika ada note: jika mengandung "setoran kas disetujui" (case-insensitive) → pakai APPROVED_TEXT
-  //   selain itu pakai note apa adanya.
-  // - Jika tidak ada note:
-  //   - CREDIT → APPROVED_TEXT
-  //   - DEBIT → "Pengeluaran kas"
   function lineText(t: Tx) {
     const raw = (t.note ?? '').trim()
     if (raw) {
@@ -88,78 +83,79 @@ export default function KasPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Kas Pemuda</h1>
-        <div className="flex items-center gap-2">
-          <NotificationBell />
-          <button
-            onClick={() => router.push('/setor')}
-            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
-          >
-            + Setor
-          </button>
-          <button
-  onClick={() => router.push('/kas/anggota')}
-  className="px-3 py-2 rounded border hover:bg-gray-50"
->
-  Anggota
-</button>
-
-          <UserMenu />
+    <Container>
+      <div className="safe-px py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Kas Pemuda</h1>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <button
+              onClick={() => router.push('/setor')}
+              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
+            >
+              + Setor
+            </button>
+            <button
+              onClick={() => router.push('/kas/anggota')}
+              className="px-3 py-2 rounded border hover:bg-gray-50"
+            >
+              Anggota
+            </button>
+            <UserMenu />
+          </div>
         </div>
-      </div>
 
-      {/* Ringkasan */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Ringkasan */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="rounded-2xl border p-4">
+            <div className="text-sm text-gray-500">Pemasukan Bulan Ini</div>
+            <div className="text-xl font-bold text-green-600">{rupiah(monthly?.credit || 0)}</div>
+          </div>
+          <div className="rounded-2xl border p-4">
+            <div className="text-sm text-gray-500">Pengeluaran Bulan Ini</div>
+            <div className="text-xl font-bold text-red-600">{rupiah(monthly?.debit || 0)}</div>
+          </div>
+          <div className="rounded-2xl border p-4">
+            <div className="text-sm text-gray-500">Total Bulan Ini</div>
+            <div className="text-xl font-bold">{rupiah(monthly?.net || 0)}</div>
+          </div>
+        </div>
+
         <div className="rounded-2xl border p-4">
-          <div className="text-sm text-gray-500">Pemasukan Bulan Ini</div>
-          <div className="text-xl font-bold text-green-600">{rupiah(monthly?.credit || 0)}</div>
+          <div className="text-sm text-gray-500">Total Saldo</div>
+          <div className="text-2xl font-bold">{rupiah(total)}</div>
         </div>
-        <div className="rounded-2xl border p-4">
-          <div className="text-sm text-gray-500">Pengeluaran Bulan Ini</div>
-          <div className="text-xl font-bold text-red-600">{rupiah(monthly?.debit || 0)}</div>
-        </div>
-        <div className="rounded-2xl border p-4">
-          <div className="text-sm text-gray-500">Total Bulan Ini</div>
-          <div className="text-xl font-bold">{rupiah(monthly?.net || 0)}</div>
-        </div>
-      </div>
 
-      <div className="rounded-2xl border p-4">
-        <div className="text-sm text-gray-500">Total Saldo</div>
-        <div className="text-2xl font-bold">{rupiah(total)}</div>
-      </div>
+        {/* Transaksi Terbaru */}
+        <div className="rounded-2xl border">
+          <div className="p-4 border-b font-medium">Transaksi Terbaru</div>
 
-      {/* Transaksi Terbaru */}
-      <div className="rounded-2xl border">
-        <div className="p-4 border-b font-medium">Transaksi Terbaru</div>
+          {loading && <div className="p-4">Memuat…</div>}
+          {err && <div className="p-4 text-red-600">❌ {err}</div>}
+          {empty && <div className="p-4 text-gray-500 text-sm">Belum ada transaksi di bulan ini.</div>}
 
-        {loading && <div className="p-4">Memuat…</div>}
-        {err && <div className="p-4 text-red-600">❌ {err}</div>}
-        {empty && <div className="p-4 text-gray-500 text-sm">Belum ada transaksi di bulan ini.</div>}
-
-        <div className="divide-y">
-          {recent.map((t: Tx, i: number) => {
-            const line = lineText(t)
-            return (
-              <div key={i} className="p-4 flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-gray-500">
-                    {new Date(t.at).toLocaleString('id-ID')}
+          <div className="divide-y">
+            {recent.map((t: Tx, i: number) => {
+              const line = lineText(t)
+              return (
+                <div key={i} className="p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-gray-500">
+                      {new Date(t.at).toLocaleString('id-ID')}
+                    </div>
+                    <div className="text-sm">{line}</div>
                   </div>
-                  <div className="text-sm">{line}</div>
+                  <div
+                    className={`font-semibold ${t.kind === 'CREDIT' ? 'text-green-700' : 'text-red-700'}`}
+                  >
+                    {t.kind === 'CREDIT' ? '+' : '-'} {rupiah(Number(t.amount))}
+                  </div>
                 </div>
-                <div
-                  className={`font-semibold ${t.kind === 'CREDIT' ? 'text-green-700' : 'text-red-700'}`}
-                >
-                  {t.kind === 'CREDIT' ? '+' : '-'} {rupiah(Number(t.amount))}
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
-    </div>
+    </Container>
   )
 }
