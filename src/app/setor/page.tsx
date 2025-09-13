@@ -129,7 +129,7 @@ export default function SetorPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto p-6 space-y-4">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       <h1 className="text-xl font-semibold">Setor Kas</h1>
 
       <form onSubmit={onSubmit} className="space-y-5">
