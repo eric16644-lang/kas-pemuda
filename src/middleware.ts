@@ -1,38 +1,28 @@
 // src/middleware.ts
 import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  const supabase = createMiddlewareClient(
+    { req, res },
     {
-      cookies: {
-        get: (name: string) => req.cookies.get(name)?.value,
-        set: (name: string, value: string, options: any) => {
-          res.cookies.set({ name, value, ...options })
-        },
-        remove: (name: string, options: any) => {
-          res.cookies.set({ name, value: '', ...options, maxAge: 0 })
-        },
-      },
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     }
   )
 
   const url = new URL(req.url)
   const path = url.pathname
 
-  // Halaman yang perlu proteksi
   const isKas = path.startsWith('/kas')
   const isAdmin = path.startsWith('/admin')
   const isAuthPage = path === '/login' || path.startsWith('/request') || path.startsWith('/requests')
 
-  // Ambil sesi
+  // Ambil sesi user
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Belum login
   if (!session) {
     if (isKas || isAdmin || path === '/beranda') {
       return NextResponse.redirect(new URL('/login', req.url))
@@ -40,7 +30,7 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
-  // Sudah login → cek role user dari tabel public.users
+  // Ambil role user dari tabel `users`
   const { data: profile } = await supabase
     .from('users')
     .select('role')
@@ -49,7 +39,7 @@ export async function middleware(req: NextRequest) {
 
   const role = (profile?.role as 'ADMIN' | 'MEMBER' | 'WARGA' | undefined) ?? 'MEMBER'
 
-  // WARGA: tidak boleh ke /kas & /admin, mendarat di /beranda
+  // ✅ Role WARGA
   if (role === 'WARGA') {
     if (isKas || isAdmin) {
       return NextResponse.redirect(new URL('/beranda', req.url))
@@ -60,12 +50,11 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
-  // MEMBER/ADMIN logged in: blok halaman auth
+  // ✅ Role MEMBER / ADMIN
   if (isAuthPage) {
     return NextResponse.redirect(new URL(role === 'ADMIN' ? '/admin' : '/kas', req.url))
   }
 
-  // MEMBER tidak boleh ke /admin
   if (role !== 'ADMIN' && isAdmin) {
     return NextResponse.redirect(new URL('/kas', req.url))
   }
@@ -73,7 +62,6 @@ export async function middleware(req: NextRequest) {
   return res
 }
 
-// Kecualikan file statis & image
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|images|api/public).*)',
