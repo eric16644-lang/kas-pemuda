@@ -1,10 +1,13 @@
+/* src/app/globals.css */
 @import "tailwindcss";
 
+/* ===== CSS Variables (Light) ===== */
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
 
+/* ===== Tailwind v4 Theme bridge (VS Code mungkin warning 'Unknown at rule @theme', aman diabaikan) ===== */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,6 +15,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* ===== Dark Scheme Variables ===== */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -19,8 +23,80 @@
   }
 }
 
+/* ===== Base ===== */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+
+  /* smoothing */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Safe-area untuk perangkat notch (iPhone, dsb.) */
+  padding-left: max(env(safe-area-inset-left), 0px);
+  padding-right: max(env(safe-area-inset-right), 0px);
+  padding-top: max(env(safe-area-inset-top), 0px);
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+/* ===== 4a. Mobile-friendly base & responsive media ===== */
+
+/* Hilangkan efek tap biru di mobile; perbaiki text-size adjust */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Media (gambar/video) auto-scale di layar kecil */
+img,
+svg,
+video,
+canvas,
+audio,
+iframe,
+embed,
+object {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Komponen interaktif: ukuran sentuh minimum */
+button,
+[a role="button"],
+input[type="button"],
+input[type="submit"] {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+}
+
+/* Teks terpilih lebih jelas di light/dark */
+::selection {
+  background: rgba(59, 130, 246, 0.25); /* ~ blue-500/25 */
+  color: inherit;
+}
+
+/* ===== 4b. Focus ring (aksesibilitas) & reduced motion ===== */
+
+/* Gaya fokus yang konsisten dan jelas (terlihat saat keyboard) */
+:focus-visible {
+  outline: 2px solid rgb(59 130 246);    /* blue-500 */
+  outline-offset: 2px;
+  border-radius: 0.375rem;               /* ~ rounded-md */
+}
+
+/* Hilangkan outline default saat bukan :focus-visible */
+:focus { outline: none; }
+
+/* Hormati preferensi pengguna: kurangi animasi */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
