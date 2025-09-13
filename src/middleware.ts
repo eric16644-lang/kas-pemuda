@@ -1,71 +1,101 @@
+// src/middleware.ts
 import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-type Role = 'ADMIN' | 'TREASURER' | 'MEMBER'
-
-async function getSessionAndRole(req: NextRequest) {
-  const res = NextResponse.next()
-  const supabase = createServerClient(URL, ANON, {
-    cookies: {
-      getAll() { return req.cookies.getAll().map(({ name, value }) => ({ name, value })) },
-      setAll(cookies) { cookies.forEach(({ name, value, options }) => { res.cookies.set(name, value, options) }) },
-    },
-  })
-
-  const { data: sess } = await supabase.auth.getSession()
-  const user = sess.session?.user ?? null
-
-  let role: Role | null = null
-  if (user) {
-    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-    role = (profile?.role as Role | undefined) ?? null
-  }
-  return { res, user, role }
-}
+import { createServerClient } from '@supabase/auth-helpers-nextjs'
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl
-  const { res, user, role } = await getSessionAndRole(req)
-  const isAdmin = role === 'ADMIN' || role === 'TREASURER'
+  const res = NextResponse.next()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return req.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          res.cookies.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          res.cookies.set({ name, value: '', ...options })
+        },
+      },
+    }
+  )
 
-  // /admin/* → wajib login & admin
+  const url = req.nextUrl
+  const pathname = url.pathname
+
+  // Lewatkan aset/statik
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/icons') ||
+    pathname.startsWith('/images') ||
+    pathname.startsWith('/api/public') // contoh API publik
+  ) {
+    return res
+  }
+
+  // Ambil user
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  // Rute publik (tanpa login)
+  const publicRoutes = new Set<string>(['/login', '/request'])
+  const isPublic = [...publicRoutes].some((p) => pathname === p || pathname.startsWith(p + '/'))
+
+  if (!user) {
+    // Belum login → boleh akses public saja
+    if (isPublic) return res
+    const redirectUrl = new URL('/login', req.url)
+    redirectUrl.searchParams.set('next', pathname)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // Sudah login → ambil role dari public.users
+  const { data: profile } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const role = (profile?.role || 'MEMBER') as 'ADMIN' | 'MEMBER' | 'WARGA'
+
+  // Redirect default saat buka root
+  if (pathname === '/') {
+    if (role === 'ADMIN') return NextResponse.redirect(new URL('/admin', req.url))
+    if (role === 'WARGA') return NextResponse.redirect(new URL('/beranda', req.url))
+    return NextResponse.redirect(new URL('/kas', req.url)) // MEMBER
+  }
+
+  // Proteksi /admin → hanya ADMIN
   if (pathname.startsWith('/admin')) {
-    if (!user) { const url = req.nextUrl.clone(); url.pathname = '/login'; return NextResponse.redirect(url) }
-    if (!isAdmin) { const url = req.nextUrl.clone(); url.pathname = '/kas'; return NextResponse.redirect(url) }
-    return res
+    if (role !== 'ADMIN') {
+      const to = role === 'WARGA' ? '/beranda' : '/kas'
+      return NextResponse.redirect(new URL(to, req.url))
+    }
   }
 
-  // /setor → wajib login
-  if (pathname.startsWith('/setor')) {
-    if (!user) { const url = req.nextUrl.clone(); url.pathname = '/login'; return NextResponse.redirect(url) }
-    return res
+  // Proteksi /kas → WARGA tidak boleh
+  if (pathname.startsWith('/kas')) {
+    if (role === 'WARGA') {
+      return NextResponse.redirect(new URL('/beranda', req.url))
+    }
   }
 
-  // /profile → wajib login
-  if (pathname.startsWith('/profile')) {
-    if (!user) { const url = req.nextUrl.clone(); url.pathname = '/login'; return NextResponse.redirect(url) }
-    return res
+  // Proteksi /beranda → khusus WARGA, yang lain diarahkan ke dashboardnya
+  if (pathname.startsWith('/beranda')) {
+    if (role === 'ADMIN') return NextResponse.redirect(new URL('/admin', req.url))
+    if (role === 'MEMBER') return NextResponse.redirect(new URL('/kas', req.url))
   }
 
-  // /riwayat → wajib login
-  if (pathname.startsWith('/riwayat')) {
-    if (!user) { const url = req.nextUrl.clone(); url.pathname = '/login'; return NextResponse.redirect(url) }
-    return res
-  }
-
-  // /login → kalau sudah login, arahkan sesuai role
-  if (pathname === '/login') {
-    if (user) { const url = req.nextUrl.clone(); url.pathname = isAdmin ? '/admin' : '/kas'; return NextResponse.redirect(url) }
-    return res
-  }
-
-  // default
   return res
 }
 
 export const config = {
-  matcher: ['/', '/login', '/setor', '/profile', '/riwayat', '/admin/:path*'],
+  matcher: [
+    // amankan semua halaman app kecuali file statik
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(png|jpg|jpeg|svg|gif|webp)).*)',
+  ],
 }
