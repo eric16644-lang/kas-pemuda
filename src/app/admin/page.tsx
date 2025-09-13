@@ -145,10 +145,14 @@ export default function AdminDashboardPage() {
             {/* Tambah saldo oleh admin */}
             <button
               onClick={() => router.push('/admin/setor')}
-              className="px-4 py-2 rounded-lg bg-emerald-600 text-white shadow hover:bg-emerald-700 transition"
-            >
-              + Tambah Saldo
-            </button>
+              className="px-4 py-2 rounded-lg shadow transition"
+  style={{
+    backgroundColor: "var(--primary)",
+    color: "white",
+  }}
+>
+  + Tambah Saldo
+</button>
 
             {/* Pengeluaran kas */}
             <button

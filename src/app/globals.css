@@ -5,6 +5,21 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  
+--primary: #2563eb;   /* biru */
+  --secondary: #10b981; /* hijau */
+  --accent: #f59e0b;    /* kuning/oranye */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+
+    --primary: #3b82f6;   /* biru sedikit lebih terang */
+    --secondary: #34d399; /* hijau terang */
+    --accent: #fbbf24;    /* kuning terang */
+  }
 }
 
 /* ===== Tailwind v4 Theme bridge (VS Code mungkin warning 'Unknown at rule @theme', aman diabaikan) ===== */
