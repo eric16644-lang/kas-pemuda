@@ -13,7 +13,8 @@ type ReqRow = {
   whatsapp: string | null
 }
 
-type Role = 'MEMBER' | 'TREASURER' | 'ADMIN'
+// ⇩ Tambah 'WARGA' di union type Role
+type Role = 'WARGA' | 'MEMBER' | 'TREASURER' | 'ADMIN'
 
 const rupiahDate = (iso: string) => new Date(iso).toLocaleString('id-ID')
 
@@ -49,15 +50,16 @@ export default function AdminRequestsPage() {
   }
 
   async function approve(id: string) {
+    // default tetap MEMBER kalau admin belum memilih
     const role = roleChoice[id] ?? 'MEMBER'
     try {
       const res = await fetch(`/api/admin/requests/${id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ role }), // ← kini bisa 'WARGA'
       })
       const j = await res.json().catch(() => ({}))
-      if (!res.ok || (j && j.error)) throw new Error(j?.error || 'Gagal approve')
+      if (!res.ok || (j && (j as any).error)) throw new Error((j as any)?.error || 'Gagal approve')
       alert('✅ Request disetujui & user dibuat')
       await fetchData()
     } catch (e) {
@@ -70,7 +72,7 @@ export default function AdminRequestsPage() {
     try {
       const res = await fetch(`/api/admin/requests/${id}/reject`, { method: 'POST' })
       const j = await res.json().catch(() => ({}))
-      if (!res.ok || (j && j.error)) throw new Error(j?.error || 'Gagal reject')
+      if (!res.ok || (j && (j as any).error)) throw new Error((j as any)?.error || 'Gagal reject')
       alert('❌ Request ditolak')
       await fetchData()
     } catch (e) {
@@ -117,6 +119,8 @@ export default function AdminRequestsPage() {
                   onChange={e => onRoleChange(r.id, e.target.value as Role)}
                   className="rounded border px-2 py-1"
                 >
+                  {/* ⇩ Tambah opsi WARGA */}
+                  <option value="WARGA">WARGA</option>
                   <option value="MEMBER">MEMBER</option>
                   <option value="TREASURER">TREASURER</option>
                   <option value="ADMIN">ADMIN</option>
