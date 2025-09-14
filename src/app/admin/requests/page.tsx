@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
@@ -13,7 +13,6 @@ type ReqRow = {
   whatsapp: string | null
 }
 
-// ⇩ Tambah 'WARGA' di union type Role
 type Role = 'WARGA' | 'MEMBER' | 'TREASURER' | 'ADMIN'
 
 const rupiahDate = (iso: string) => new Date(iso).toLocaleString('id-ID')
@@ -27,8 +26,9 @@ export default function AdminRequestsPage() {
   const [items, setItems] = useState<ReqRow[]>([])
   const [roleChoice, setRoleChoice] = useState<Record<string, Role>>({})
 
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     setLoading(true); setErr(null)
+
     const { data: s } = await supabase.auth.getSession()
     if (!s.session) { router.replace('/login'); return }
 
@@ -41,25 +41,27 @@ export default function AdminRequestsPage() {
     if (error) { setErr(error.message); setLoading(false); return }
     setItems((data ?? []) as ReqRow[])
     setLoading(false)
-  }
+  }, [router, supabase])
 
-  useEffect(() => { void fetchData() }, [])
+  useEffect(() => { void fetchData() }, [fetchData])
 
   function onRoleChange(id: string, r: Role) {
     setRoleChoice(m => ({ ...m, [id]: r }))
   }
 
   async function approve(id: string) {
-    // default tetap MEMBER kalau admin belum memilih
     const role = roleChoice[id] ?? 'MEMBER'
     try {
       const res = await fetch(`/api/admin/requests/${id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }), // ← kini bisa 'WARGA'
+        body: JSON.stringify({ role }),
       })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok || (j && (j as any).error)) throw new Error((j as any)?.error || 'Gagal approve')
+
+      let j: { error?: string } = {}
+      try { j = await res.json() as { error?: string } } catch { /* ignore */ }
+
+      if (!res.ok || j.error) throw new Error(j.error ?? 'Gagal approve')
       alert('✅ Request disetujui & user dibuat')
       await fetchData()
     } catch (e) {
@@ -71,8 +73,11 @@ export default function AdminRequestsPage() {
     if (!confirm('Tolak & hapus request ini?')) return
     try {
       const res = await fetch(`/api/admin/requests/${id}/reject`, { method: 'POST' })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok || (j && (j as any).error)) throw new Error((j as any)?.error || 'Gagal reject')
+
+      let j: { error?: string } = {}
+      try { j = await res.json() as { error?: string } } catch { /* ignore */ }
+
+      if (!res.ok || j.error) throw new Error(j.error ?? 'Gagal reject')
       alert('❌ Request ditolak')
       await fetchData()
     } catch (e) {
@@ -119,7 +124,6 @@ export default function AdminRequestsPage() {
                   onChange={e => onRoleChange(r.id, e.target.value as Role)}
                   className="rounded border px-2 py-1"
                 >
-                  {/* ⇩ Tambah opsi WARGA */}
                   <option value="WARGA">WARGA</option>
                   <option value="MEMBER">MEMBER</option>
                   <option value="TREASURER">TREASURER</option>
