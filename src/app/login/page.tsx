@@ -12,37 +12,27 @@ export default function LoginPage() {
   const router = useRouter()
   const supabase = supabaseBrowser()
 
-  const [email, setEmail] = useState<string>('')
-  const [password, setPassword] = useState<string>('')
-  const [loading, setLoading] = useState<boolean>(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  async function routeByRole() {
-    const { data: s } = await supabase.auth.getSession()
-    const user = s.session?.user
-    if (!user) return
-
-    const { data: profile, error } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (error) {
-      // fallback ke /kas kalau gagal baca profile
-      router.replace('/kas')
-      return
-    }
-
-    const role = (profile?.role as Role | undefined) ?? 'MEMBER'
-    if (role === 'ADMIN') router.replace('/admin')
-    else if (role === 'WARGA') router.replace('/beranda')
-    else router.replace('/kas')
-  }
-
-  // Jika sudah login, langsung arahkan berdasar role
+  // Arahkan user yang SUDAH login (hard-refresh / buka /login)
   useEffect(() => {
     ;(async () => {
-      await routeByRole()
+      const { data } = await supabase.auth.getSession()
+      const uid = data.session?.user.id
+      if (!uid) return
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', uid)
+        .maybeSingle()
+
+      const role = (profile?.role as Role | undefined) ?? 'MEMBER'
+      if (role === 'ADMIN') router.replace('/admin')
+      else if (role === 'WARGA') router.replace('/beranda')
+      else router.replace('/kas')
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -53,8 +43,9 @@ export default function LoginPage() {
       toast.error('Email dan password wajib diisi')
       return
     }
+
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
 
     if (error) {
@@ -62,9 +53,32 @@ export default function LoginPage() {
       return
     }
 
+    // ✅ Gunakan user dari hasil login (lebih andal daripada menunggu getSession())
+    const uid = data.user?.id
+    if (!uid) {
+      toast.error('Tidak mendapatkan data pengguna setelah login')
+      return
+    }
+
+    // Ambil role dari tabel public.users
+    const { data: profile, error: profileErr } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', uid)
+      .maybeSingle()
+
+    if (profileErr) {
+      // fallback aman
+      toast.success('Berhasil masuk')
+      router.replace('/kas')
+      return
+    }
+
+    const role = (profile?.role as Role | undefined) ?? 'MEMBER'
     toast.success('Berhasil masuk')
-    // Arahkan sesuai role
-    await routeByRole()
+    if (role === 'ADMIN') router.replace('/admin')
+    else if (role === 'WARGA') router.replace('/beranda')
+    else router.replace('/kas')
   }
 
   return (
@@ -80,9 +94,7 @@ export default function LoginPage() {
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm mb-1">
-                Email
-              </label>
+              <label htmlFor="email" className="block text-sm mb-1">Email</label>
               <input
                 id="email"
                 type="email"
@@ -96,9 +108,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm mb-1">
-                Password
-              </label>
+              <label htmlFor="password" className="block text-sm mb-1">Password</label>
               <input
                 id="password"
                 type="password"
@@ -123,10 +133,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Belum punya ID?{' '}
-              <button
-                onClick={() => router.push('/request')}
-                className="text-blue-600 hover:underline"
-              >
+              <button onClick={() => router.push('/request')} className="text-blue-600 hover:underline">
                 Request akun
               </button>
             </p>
