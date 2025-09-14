@@ -38,48 +38,48 @@ export default function LoginPage() {
   }, [])
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!email || !password) {
-      toast.error('Email dan password wajib diisi')
-      return
-    }
-
-    setLoading(true)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-
-    if (error) {
-      toast.error(error.message || 'Gagal masuk')
-      return
-    }
-
-    // ✅ Gunakan user dari hasil login (lebih andal daripada menunggu getSession())
-    const uid = data.user?.id
-    if (!uid) {
-      toast.error('Tidak mendapatkan data pengguna setelah login')
-      return
-    }
-
-    // Ambil role dari tabel public.users
-    const { data: profile, error: profileErr } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', uid)
-      .maybeSingle()
-
-    if (profileErr) {
-      // fallback aman
-      toast.success('Berhasil masuk')
-      router.replace('/kas')
-      return
-    }
-
-    const role = (profile?.role as Role | undefined) ?? 'MEMBER'
-    toast.success('Berhasil masuk')
-    if (role === 'ADMIN') router.replace('/admin')
-    else if (role === 'WARGA') router.replace('/beranda')
-    else router.replace('/kas')
+  e.preventDefault()
+  if (!email || !password) {
+    toast.error('Email dan password wajib diisi')
+    return
   }
+
+  setLoading(true)
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  setLoading(false)
+
+  if (error) {
+    toast.error(error.message || 'Gagal masuk')
+    return
+  }
+
+  const uid = data.user?.id
+  if (!uid) {
+    toast.error('Tidak mendapatkan data pengguna setelah login')
+    return
+  }
+
+  // Ambil role user
+  const { data: profile } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', uid)
+    .maybeSingle()
+
+  const role = (profile?.role as 'ADMIN' | 'MEMBER' | 'WARGA' | undefined) ?? 'MEMBER'
+
+  toast.success('Berhasil masuk')
+
+  // ✅ pakai hard redirect supaya cookie sesi pasti kebawa & tidak diblok middleware
+  const target =
+    role === 'ADMIN' ? '/admin' :
+    role === 'WARGA' ? '/beranda' : '/kas'
+
+  // beri jeda sangat singkat agar toast sempat tampil & cookie flush
+  setTimeout(() => {
+    window.location.assign(target) // atau window.location.href = target
+  }, 100)
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-8 bg-gray-50 dark:bg-gray-950">
