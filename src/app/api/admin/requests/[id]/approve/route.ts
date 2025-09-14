@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-type Role = 'MEMBER' | 'TREASURER' | 'ADMIN'
+type Role = 'WARGA' | 'MEMBER' | 'TREASURER' | 'ADMIN'
 
 // Catatan: di Next.js 15, context.params adalah Promise
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
