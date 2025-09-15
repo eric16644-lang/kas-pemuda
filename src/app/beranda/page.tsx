@@ -55,10 +55,10 @@ export default function BerandaPage() {
   // menu kiri (dummy link)
   const sideMenu = [
     { label: 'Beranda', href: '/beranda', active: true },
-    { label: 'Kegiatan', href: '#' },
-    { label: 'Info Pekerjaan', href: '#' },
+    { label: 'Kegiatan', href: '/beranda/kegiatan' },
+    { label: 'Info Pekerjaan', href: '/beranda/kegiatan' },
     { label: 'Transparansi Keuangan', href: '/beranda/keuangan' },
-    { label: 'Product', href: '#' },
+    { label: 'Edit Profile', href: '/profile' },
   ]
 
   return (
