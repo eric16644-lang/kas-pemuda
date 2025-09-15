@@ -57,7 +57,7 @@ export default function BerandaPage() {
     { label: 'Beranda', href: '/beranda', active: true },
     { label: 'Kegiatan', href: '#' },
     { label: 'Info Pekerjaan', href: '#' },
-    { label: 'Transparansi Keuangan', href: '#' },
+    { label: 'Transparansi Keuangan', href: '/beranda/keuangan' },
     { label: 'Product', href: '#' },
   ]
 
