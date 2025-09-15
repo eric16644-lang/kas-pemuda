@@ -85,18 +85,17 @@ export default function BerandaPage() {
                 className="rounded-full bg-white/90 p-1"
               />
               <div className="font-semibold tracking-wide">
-                Sistem Informasi <span className="opacity-90">Akademik</span>
-              </div>
-            </div>
+  Blok <span className="opacity-90">Astana</span>
+              <div className="text-xs font-normal leading-tight">
+    DESA TALAGA WETAN
+  </div>
+  </div>
+  </div>
           </div>
 
           {/* Menu top (dummy) */}
           <nav className="hidden md:flex items-center gap-6 text-sm">
-            <a href="#" className="hover:underline">Data Siswa</a>
-            <a href="#" className="hover:underline">Data Guru</a>
-            <a href="#" className="hover:underline">Wali Siswa</a>
-            <a href="#" className="hover:underline">Matpel</a>
-            <a href="#" className="hover:underline">Kontrak</a>
+            <a href="#" className="hover:underline">Info</a>
           </nav>
         </div>
       </header>
@@ -189,7 +188,7 @@ export default function BerandaPage() {
                 {role ? <span className="font-normal text-gray-700 dark:text-gray-300"> ({role})</span> : null}
               </h1>
               <p className="mt-3 text-base md:text-lg font-semibold">
-                Sistem Informasi Akademik
+                Website Blok Astana
               </p>
 
               <div className="mt-10 flex justify-center">
