@@ -57,6 +57,7 @@ export default function BerandaPage() {
     { label: 'Beranda', href: '/beranda', active: true },
     { label: 'Kegiatan', href: '/beranda/kegiatan' },
     { label: 'Info Pekerjaan', href: '/beranda/kegiatan' },
+    { label: 'Info Kepengurusan', href: '/beranda/kegiatan' },
     { label: 'Transparansi Keuangan', href: '/beranda/keuangan' },
     { label: 'Edit Profile', href: '/profile' },
   ]
@@ -183,7 +184,6 @@ export default function BerandaPage() {
             <div className="text-center max-w-3xl mx-auto">
               <h1 className="text-2xl md:text-3xl font-extrabold text-blue-700">
                 Selamat Datang, {fullName}
-                {role ? <span className="font-normal text-gray-700 dark:text-gray-300"> ({role})</span> : null}
               </h1>
               <p className="mt-3 text-base md:text-lg font-semibold">
                 di Website Blok Astana
