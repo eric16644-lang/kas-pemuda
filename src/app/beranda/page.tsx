@@ -55,12 +55,10 @@ export default function BerandaPage() {
   // menu kiri (dummy link)
   const sideMenu = [
     { label: 'Beranda', href: '/beranda', active: true },
-    { label: 'Kelola Siswa', href: '#' },
-    { label: 'Kelola Guru', href: '#' },
-    { label: 'Kelola Kelas', href: '#' },
-    { label: 'Kelola Mata Pelajaran', href: '#' },
-    { label: 'Kelola Wali Siswa', href: '#' },
-    { label: 'Kelola Kontrak', href: '#' },
+    { label: 'Kegiatan', href: '#' },
+    { label: 'Info Pekerjaan', href: '#' },
+    { label: 'Transparansi Keuangan', href: '#' },
+    { label: 'Product', href: '#' },
   ]
 
   return (
@@ -188,13 +186,13 @@ export default function BerandaPage() {
                 {role ? <span className="font-normal text-gray-700 dark:text-gray-300"> ({role})</span> : null}
               </h1>
               <p className="mt-3 text-base md:text-lg font-semibold">
-                Website Blok Astana
+                di Website Blok Astana
               </p>
 
               <div className="mt-10 flex justify-center">
                 <Image
                   src="/logo.png" // ganti sesuai aset Anda
-                  alt="Lambang Sekolah"
+                  alt="Lambang"
                   width={300}
                   height={300}
                   className="w-52 md:w-72 h-auto object-contain"
