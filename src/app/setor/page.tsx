@@ -88,6 +88,8 @@ export default function SetorPage() {
       return
     }
 
+    const accessToken = s.session!.access_token
+
     // upload ke bucket proofs
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
     const path = `${uid}/${Date.now()}.${ext}`
