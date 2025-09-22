@@ -1,13 +1,11 @@
 // src/app/api/proofs/route.ts
 import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+import { cookies } from 'next/headers'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 
 export const dynamic = 'force-dynamic'
-// (opsional, jika kamu pernah set ke edge)
-// export const runtime = 'nodejs'
+// Pastikan nodejs runtime (auth-helpers tak support edge)
+export const runtime = 'nodejs'
 
 type Body = { amount?: unknown; screenshot_url?: unknown; checksum?: unknown }
 type ApiResp = { ok?: boolean; error?: string }
@@ -15,20 +13,8 @@ type ApiResp = { ok?: boolean; error?: string }
 export async function POST(req: NextRequest) {
   const res = new NextResponse()
 
-  // ✅ Gunakan get/set/remove (BUKAN getAll/setAll)
-  const supabase = createServerClient(URL, ANON, {
-    cookies: {
-      get(name: string) {
-        return req.cookies.get(name)?.value
-      },
-      set(name: string, value: string, options: Parameters<typeof res.cookies.set>[2]) {
-        res.cookies.set(name, value, options)
-      },
-      remove(name: string, options: Parameters<typeof res.cookies.set>[2]) {
-        res.cookies.set(name, '', { ...options, maxAge: 0 })
-      },
-    },
-  })
+  // ✅ Gunakan auth-helpers di route handler (konsisten dengan client & middleware)
+  const supabase = createRouteHandlerClient({ cookies })
 
   const { data: s } = await supabase.auth.getSession()
   const uid = s.session?.user.id
