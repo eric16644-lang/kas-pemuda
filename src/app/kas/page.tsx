@@ -101,6 +101,12 @@ export default function KasPage() {
             >
               Anggota
             </button>
+            <button
+            onClick={() => router.push('/beranda')}
+              className="bg-green-600 hover:bg-yellow-700 text-white px-3 py-1 rounded"
+            >
+              Web Utama
+            </button>
             <UserMenu />
           </div>
         </div>
