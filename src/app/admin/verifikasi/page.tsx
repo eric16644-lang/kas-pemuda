@@ -4,45 +4,38 @@ import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { toast } from 'sonner'
 
-
 const supabase = supabaseBrowser()
+
+async function getAccessToken() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('no-session')
+  return session.access_token
+}
 
 async function toSignedUrlFromStored(stored: string | null | undefined): Promise<string | null> {
   if (!stored) return null
 
-  // 1) Ambil path objek di bucket 'proofs'
-  //    - Jika tersimpan full URL public:  https://.../storage/v1/object/public/proofs/<PATH>
-  //    - Jika tersimpan path relatif:     <PATH> (mis. "userId/123.jpg")
   let path = stored
-
-  // Jika berupa URL penuh, coba ambil bagian setelah '/object/' lalu buang prefix 'public/proofs/'
   try {
     if (/^https?:\/\//i.test(stored)) {
       const u = new URL(stored)
-      // contoh pathname: /storage/v1/object/public/proofs/uid/123.jpg
       const idx = u.pathname.indexOf('/object/')
       if (idx >= 0) {
         const after = u.pathname.slice(idx + '/object/'.length) // "public/proofs/uid/123.jpg"
-        // buang "public/proofs/" jika ada
         path = after.replace(/^public\/proofs\//, '')
       }
     }
   } catch {
-    // abaikan jika URL parsing gagal; anggap stored sudah path
+    // abaikan
   }
 
-  // 2) Buat signed URL 1 jam
-  const { data, error } = await supabase.storage
-    .from('proofs')
-    .createSignedUrl(path, 60 * 60) // 1 jam
-
+  const { data, error } = await supabase.storage.from('proofs').createSignedUrl(path, 60 * 60)
   if (error) {
     console.error('createSignedUrl error:', error.message)
     return null
   }
   return data?.signedUrl ?? null
 }
-
 
 type ProofRow = {
   id: string
@@ -52,7 +45,7 @@ type ProofRow = {
   amount_input: number | null
   screenshot_url: string | null
   signedUrl?: string | null
-  displayName?: string | null      // ← nama user hasil lookup
+  displayName?: string | null
 }
 
 const rupiah = (n: number) =>
@@ -60,7 +53,6 @@ const rupiah = (n: number) =>
 
 export default function AdminVerifikasiPage() {
   const router = useRouter()
-  const supabase = supabaseBrowser()
 
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -75,49 +67,44 @@ export default function AdminVerifikasiPage() {
     if (!s.session) { router.replace('/login'); return }
 
     const { data, error } = await supabase
-  .from('payment_proofs')
-  .select('id, created_at, status, user_id, amount_input, screenshot_url') // ← tidak join users
-  .eq('status', 'PENDING')
-  .order('created_at', { ascending: false })
-  .limit(100)
+      .from('payment_proofs')
+      .select('id, created_at, status, user_id, amount_input, screenshot_url')
+      .eq('status', 'PENDING')
+      .order('created_at', { ascending: false })
+      .limit(100)
 
-if (error) { setErr(error.message); setLoading(false); return }
+    if (error) { setErr(error.message); setLoading(false); return }
 
-const rows = (data ?? []) as ProofRow[]
+    const rows = (data ?? []) as ProofRow[]
+    const userIds = Array.from(new Set(rows.map(r => r.user_id))).filter(Boolean)
 
-// ambil id unik
-const userIds = Array.from(new Set(rows.map(r => r.user_id))).filter(Boolean)
+    let nameMap = new Map<string, string | null>()
+    if (userIds.length) {
+      const { data: usersData, error: usersErr } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .in('id', userIds)
 
-// ambil nama dari tabel public.users (kolom full_name sesuai screenshot kamu)
-let nameMap = new Map<string, string | null>()
-if (userIds.length) {
-  const { data: usersData, error: usersErr } = await supabase
-    .from('users')
-    .select('id, full_name')
-    .in('id', userIds)
+      if (usersErr) {
+        console.error('fetch users error:', usersErr.message)
+      } else {
+        nameMap = new Map<string, string | null>(
+          (usersData ?? []).map((u: { id: string; full_name: string | null }) => [u.id, u.full_name])
+        )
+      }
+    }
 
-  if (usersErr) {
-    console.error('fetch users error:', usersErr.message)
-  } else {
-    nameMap = new Map<string, string | null>(
-      (usersData ?? []).map((u: { id: string; full_name: string | null }) => [u.id, u.full_name])
+    const withSigned = await Promise.all(
+      rows.map(async (r) => ({
+        ...r,
+        signedUrl: await toSignedUrlFromStored(r.screenshot_url),
+        displayName: nameMap.get(r.user_id) ?? r.user_id,
+      }))
     )
-  }
-}
 
-// lengkapi signedUrl + displayName
-const withSigned = await Promise.all(
-  rows.map(async (r) => ({
-    ...r,
-    signedUrl: await toSignedUrlFromStored(r.screenshot_url),
-    displayName: nameMap.get(r.user_id) ?? r.user_id,
-  }))
-)
-
-setItems(withSigned)
-setLoading(false)
-
-  }, [router, supabase])
+    setItems(withSigned)
+    setLoading(false)
+  }, [router])
 
   useEffect(() => { fetchPending() }, [fetchPending])
 
@@ -126,44 +113,78 @@ setLoading(false)
   }
 
   async function approve(id: string, existingAmount: number | null) {
-  try {
-    let bodyString: string | undefined
-    let headers: HeadersInit | undefined
+    try {
+      const token = await getAccessToken()
 
-    if (existingAmount === null) {
-      const raw = fallbackAmount[id]
-      const a = Number(raw?.replace(/\D+/g, ''))
-      if (!Number.isFinite(a) || a <= 0) { toast.error('Masukkan nominal fallback (> 0).'); return }
-      bodyString = JSON.stringify({ amount: a })
-      headers = { 'Content-Type': 'application/json' }
-    }
+      // Siapkan payload untuk /api/admin/approve
+      // Jika kamu TIDAK menerapkan patch server (#2), payload cukup { proofId } saja.
+      // Jika kamu MENERAPKAN patch server (#2) agar bisa set amount, ikutkan { amount } saat amount_input null.
+      const payload: Record<string, unknown> = { proofId: id }
 
-    const r = await fetch(`/api/proofs/${id}/approve`, { method: 'POST', headers, body: bodyString })
-    const j = await r.json().catch(() => ({}))
-    if (!r.ok || (j && (j as { error?: string }).error)) {
-      throw new Error((j as { error?: string }).error ?? 'Gagal approve')
+      if (existingAmount === null) {
+        const raw = fallbackAmount[id]
+        const a = Number(raw?.replace(/\D+/g, ''))
+        if (!Number.isFinite(a) || a <= 0) { toast.error('Masukkan nominal fallback (> 0).'); return }
+        payload.amount = a
+      }
+
+      const r = await fetch('/api/admin/approve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, // ⬅️ WAJIB
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || (j && (j as { error?: string }).error)) {
+        throw new Error((j as { error?: string }).error ?? 'Gagal approve')
+      }
+
+      await fetchPending()
+      toast.success('Bukti disetujui ✅')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'approve'
+      if (msg === 'no-session') {
+        toast.error('Sesi kadaluarsa. Silakan login ulang.')
+        router.replace('/login')
+      } else {
+        toast.error('Gagal: ' + msg)
+      }
     }
-    await fetchPending()
-    toast.success('Bukti disetujui ✅')
-  } catch (e) {
-    toast.error('Gagal: ' + (e instanceof Error ? e.message : 'approve'))
   }
-}
 
-async function reject(id: string) {
-  try {
-    const r = await fetch(`/api/proofs/${id}/reject`, { method: 'POST' })
-    const j = await r.json().catch(() => ({}))
-    if (!r.ok || (j && (j as { error?: string }).error)) {
-      throw new Error((j as { error?: string }).error ?? 'Gagal reject')
+  async function reject(id: string) {
+    try {
+      const token = await getAccessToken()
+
+      const r = await fetch('/api/admin/reject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, // ⬅️ WAJIB
+        },
+        body: JSON.stringify({ proofId: id }),
+      })
+
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || (j && (j as { error?: string }).error)) {
+        throw new Error((j as { error?: string }).error ?? 'Gagal reject')
+      }
+
+      await fetchPending()
+      toast.success('Bukti ditolak ❌')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'reject'
+      if (msg === 'no-session') {
+        toast.error('Sesi kadaluarsa. Silakan login ulang.')
+        router.replace('/login')
+      } else {
+        toast.error('Gagal: ' + msg)
+      }
     }
-    await fetchPending()
-    toast.success('Bukti ditolak ❌')
-  } catch (e) {
-    toast.error('Gagal: ' + (e instanceof Error ? e.message : 'reject'))
   }
-}
-
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
@@ -218,24 +239,22 @@ async function reject(id: string) {
               </div>
               <div className="text-center">
                 {(p.signedUrl || p.screenshot_url)
-  ? <img src={p.signedUrl || p.screenshot_url!} alt="bukti" className="inline-block h-12 w-12 object-cover rounded" />
-  : <span className="text-xs text-gray-400">—</span>
-}
-
+                  ? <img src={p.signedUrl || p.screenshot_url!} alt="bukti" className="inline-block h-12 w-12 object-cover rounded" />
+                  : <span className="text-xs text-gray-400">—</span>
+                }
               </div>
               <div className="text-center">
                 {(p.signedUrl || p.screenshot_url)
-  ? <a
-      href={p.signedUrl || p.screenshot_url!}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-blue-600 underline text-xs"
-    >
-      Buka
-    </a>
-  : <span className="text-xs text-gray-400">—</span>
-}
-
+                  ? <a
+                      href={p.signedUrl || p.screenshot_url!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline text-xs"
+                    >
+                      Buka
+                    </a>
+                  : <span className="text-xs text-gray-400">—</span>
+                }
               </div>
               <div className="flex md:justify-end gap-2">
                 <button
