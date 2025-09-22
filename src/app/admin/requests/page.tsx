@@ -1,145 +1,270 @@
 'use client'
-
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
+import { toast } from 'sonner'
 
-type ReqRow = {
-  id: string
-  created_at: string
-  full_name: string
-  email: string
-  password: string
-  whatsapp: string | null
+const supabase = supabaseBrowser()
+
+async function getAccessToken() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('no-session')
+  return session.access_token
 }
 
-type Role = 'WARGA' | 'MEMBER' | 'TREASURER' | 'ADMIN'
+async function toSignedUrlFromStored(stored: string | null | undefined): Promise<string | null> {
+  if (!stored) return null
 
-const rupiahDate = (iso: string) => new Date(iso).toLocaleString('id-ID')
+  let path = stored
+  try {
+    if (/^https?:\/\//i.test(stored)) {
+      const u = new URL(stored)
+      const idx = u.pathname.indexOf('/object/')
+      if (idx >= 0) {
+        const after = u.pathname.slice(idx + '/object/'.length) // "public/proofs/uid/123.jpg"
+        path = after.replace(/^public\/proofs\//, '')
+      }
+    }
+  } catch {
+    // abaikan kalau parsing URL gagal; anggap stored sudah path
+  }
 
-export default function AdminRequestsPage() {
+  const { data, error } = await supabase.storage.from('proofs').createSignedUrl(path, 60 * 60)
+  if (error) {
+    console.error('createSignedUrl error:', error.message)
+    return null
+  }
+  return data?.signedUrl ?? null
+}
+
+type ProofRow = {
+  id: string
+  created_at: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  user_id: string
+  amount_input: number | null
+  screenshot_url: string | null
+  signedUrl?: string | null
+  displayName?: string | null
+}
+
+const rupiah = (n: number) =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
+
+export default function AdminVerifikasiPage() {
   const router = useRouter()
-  const supabase = supabaseBrowser()
 
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
-  const [items, setItems] = useState<ReqRow[]>([])
-  const [roleChoice, setRoleChoice] = useState<Record<string, Role>>({})
+  const [items, setItems] = useState<ProofRow[]>([])
+  const [fallbackAmount, setFallbackAmount] = useState<Record<string, string>>({})
 
-  const fetchData = useCallback(async () => {
-    setLoading(true); setErr(null)
+  const fetchPending = useCallback(async () => {
+    setLoading(true)
+    setErr(null)
 
     const { data: s } = await supabase.auth.getSession()
     if (!s.session) { router.replace('/login'); return }
 
     const { data, error } = await supabase
-      .from('requests')
-      .select('id, created_at, full_name, email, password, whatsapp')
+      .from('payment_proofs')
+      .select('id, created_at, status, user_id, amount_input, screenshot_url')
+      .eq('status', 'PENDING')
       .order('created_at', { ascending: false })
-      .limit(200)
+      .limit(100)
 
     if (error) { setErr(error.message); setLoading(false); return }
-    setItems((data ?? []) as ReqRow[])
+
+    const rows = (data ?? []) as ProofRow[]
+    const userIds = Array.from(new Set(rows.map(r => r.user_id))).filter(Boolean)
+
+    let nameMap = new Map<string, string | null>()
+    if (userIds.length) {
+      const { data: usersData, error: usersErr } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .in('id', userIds)
+
+      if (usersErr) {
+        console.error('fetch users error:', usersErr.message)
+      } else {
+        nameMap = new Map<string, string | null>(
+          (usersData ?? []).map((u: { id: string; full_name: string | null }) => [u.id, u.full_name])
+        )
+      }
+    }
+
+    const withSigned = await Promise.all(
+      rows.map(async (r) => ({
+        ...r,
+        signedUrl: await toSignedUrlFromStored(r.screenshot_url),
+        displayName: nameMap.get(r.user_id) ?? r.user_id,
+      }))
+    )
+
+    setItems(withSigned)
     setLoading(false)
-  }, [router, supabase])
+  }, [router])
 
-  useEffect(() => { void fetchData() }, [fetchData])
+  useEffect(() => { fetchPending() }, [fetchPending])
 
-  function onRoleChange(id: string, r: Role) {
-    setRoleChoice(m => ({ ...m, [id]: r }))
+  function onChangeFallback(id: string, v: string) {
+    setFallbackAmount((m) => ({ ...m, [id]: v }))
   }
 
-  async function approve(id: string) {
-    const role = roleChoice[id] ?? 'MEMBER'
+  async function approve(id: string, existingAmount: number | null) {
     try {
-      const res = await fetch(`/api/admin/requests/${id}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
-      })
+      const token = await getAccessToken()
 
-      let j: { error?: string } = {}
-      try { j = await res.json() as { error?: string } } catch { /* ignore */ }
+      let bodyString: string | undefined
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`, // ⬅️ WAJIB
+      }
 
-      if (!res.ok || j.error) throw new Error(j.error ?? 'Gagal approve')
-      alert('✅ Request disetujui & user dibuat')
-      await fetchData()
+      if (existingAmount === null) {
+        const raw = fallbackAmount[id]
+        const a = Number(raw?.replace(/\D+/g, ''))
+        if (!Number.isFinite(a) || a <= 0) { toast.error('Masukkan nominal fallback (> 0).'); return }
+        bodyString = JSON.stringify({ amount: a })
+      }
+
+      // Jika kamu ingin pakai endpoint /api/admin/approve:
+      // const r = await fetch('/api/admin/approve', { method: 'POST', headers, body: JSON.stringify({ proofId: id, ...(bodyString ? JSON.parse(bodyString) : {}) }) })
+
+      const r = await fetch(`/api/proofs/${id}/approve`, { method: 'POST', headers, body: bodyString })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || (j && (j as { error?: string }).error)) {
+        throw new Error((j as { error?: string }).error ?? 'Gagal approve')
+      }
+
+      await fetchPending()
+      toast.success('Bukti disetujui ✅')
     } catch (e) {
-      alert('❌ ' + (e instanceof Error ? e.message : 'Gagal approve'))
+      const msg = e instanceof Error ? e.message : 'approve'
+      if (msg === 'no-session') {
+        toast.error('Sesi kadaluarsa. Silakan login ulang.')
+        router.replace('/login')
+      } else {
+        toast.error('Gagal: ' + msg)
+      }
     }
   }
 
   async function reject(id: string) {
-    if (!confirm('Tolak & hapus request ini?')) return
     try {
-      const res = await fetch(`/api/admin/requests/${id}/reject`, { method: 'POST' })
+      const token = await getAccessToken()
 
-      let j: { error?: string } = {}
-      try { j = await res.json() as { error?: string } } catch { /* ignore */ }
+      // Jika kamu ingin pakai endpoint /api/admin/reject (kalau ada):
+      // const r = await fetch('/api/admin/reject', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ proofId: id }) })
 
-      if (!res.ok || j.error) throw new Error(j.error ?? 'Gagal reject')
-      alert('❌ Request ditolak')
-      await fetchData()
+      const r = await fetch(`/api/proofs/${id}/reject`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`, // ⬅️ WAJIB
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || (j && (j as { error?: string }).error)) {
+        throw new Error((j as { error?: string }).error ?? 'Gagal reject')
+      }
+
+      await fetchPending()
+      toast.success('Bukti ditolak ❌')
     } catch (e) {
-      alert('❌ ' + (e instanceof Error ? e.message : 'Gagal reject'))
+      const msg = e instanceof Error ? e.message : 'reject'
+      if (msg === 'no-session') {
+        toast.error('Sesi kadaluarsa. Silakan login ulang.')
+        router.replace('/login')
+      } else {
+        toast.error('Gagal: ' + msg)
+      }
     }
   }
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Request Akun Member</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Verifikasi Bukti Setoran</h1>
         <div className="flex gap-2">
           <button onClick={() => router.push('/admin')} className="px-3 py-1 rounded border">← Dashboard</button>
-          <button onClick={fetchData} className="px-3 py-1 rounded bg-gray-800 text-white">Muat Ulang</button>
+          <button onClick={fetchPending} className="px-3 py-1 rounded bg-gray-800 text-white hover:bg-gray-900">Muat Ulang</button>
         </div>
       </div>
 
       {loading && <div>Memuat…</div>}
       {err && <div className="text-red-600">❌ {err}</div>}
-      {!loading && !err && items.length === 0 && <div className="text-sm text-gray-500">Belum ada request.</div>}
+      {!loading && !err && items.length === 0 && <div className="text-sm text-gray-500">Tidak ada bukti PENDING.</div>}
 
       <div className="rounded-2xl border overflow-hidden">
-        <div className="hidden md:grid grid-cols-7 gap-2 px-4 py-2 border-b text-sm font-medium bg-gray-50">
+        <div className="hidden md:grid grid-cols-7 gap-2 px-4 py-2 border-b text-sm font-medium bg-gray-50 dark:bg-gray-800">
           <div>Tanggal</div>
-          <div>Nama</div>
-          <div>Email</div>
-          <div>WhatsApp</div>
-          <div>Role</div>
-          <div>Password</div>
+          <div>User</div>
+          <div>Nominal</div>
+          <div className="text-center">Status</div>
+          <div className="text-center">Bukti</div>
+          <div className="text-center">Link</div>
           <div className="text-right pr-2">Aksi</div>
         </div>
 
         <ul className="divide-y">
-          {items.map(r => (
-            <li key={r.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-7 gap-2 items-center">
-              <div className="text-sm text-gray-600">{rupiahDate(r.created_at)}</div>
-              <div className="text-sm">{r.full_name}</div>
-              <div className="text-sm break-all">{r.email}</div>
-              <div className="text-sm break-all">{r.whatsapp ?? '—'}</div>
-
-              <div>
-                <select
-                  value={roleChoice[r.id] ?? 'MEMBER'}
-                  onChange={e => onRoleChange(r.id, e.target.value as Role)}
-                  className="rounded border px-2 py-1"
-                >
-                  <option value="WARGA">WARGA</option>
-                  <option value="MEMBER">MEMBER</option>
-                  <option value="TREASURER">TREASURER</option>
-                  <option value="ADMIN">ADMIN</option>
-                </select>
+          {items.map((p) => (
+            <li key={p.id} className="px-4 py-3 grid grid-cols-1 md:grid-cols-7 gap-2 items-center">
+              <div className="text-sm text-gray-600">{new Date(p.created_at).toLocaleString('id-ID')}</div>
+              <div className="text-sm break-all">{p.displayName ?? p.user_id}</div>
+              <div className="font-semibold">
+                {typeof p.amount_input === 'number'
+                  ? rupiah(p.amount_input)
+                  : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="fallback"
+                        value={fallbackAmount[p.id] ?? ''}
+                        onChange={(e) => onChangeFallback(p.id, e.target.value)}
+                        className="w-28 rounded border px-2 py-1"
+                      />
+                      <span className="text-xs text-gray-500">← isi nominal jika kosong</span>
+                    </div>
+                  )
+                }
               </div>
-
-              <div className="text-xs text-gray-500 select-all">
-                {r.password ? '•••••••• (tersimpan untuk approve)' : '—'}
+              <div className="text-center">
+                <span className="rounded-full px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-700">{p.status}</span>
               </div>
-
+              <div className="text-center">
+                {(p.signedUrl || p.screenshot_url)
+                  ? <img src={p.signedUrl || p.screenshot_url!} alt="bukti" className="inline-block h-12 w-12 object-cover rounded" />
+                  : <span className="text-xs text-gray-400">—</span>
+                }
+              </div>
+              <div className="text-center">
+                {(p.signedUrl || p.screenshot_url)
+                  ? <a
+                      href={p.signedUrl || p.screenshot_url!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline text-xs"
+                    >
+                      Buka
+                    </a>
+                  : <span className="text-xs text-gray-400">—</span>
+                }
+              </div>
               <div className="flex md:justify-end gap-2">
-                <button onClick={() => approve(r.id)} className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700">
+                <button
+                  onClick={() => approve(p.id, p.amount_input)}
+                  className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+                >
                   Approve
                 </button>
-                <button onClick={() => reject(r.id)} className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700">
+                <button
+                  onClick={() => reject(p.id)}
+                  className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                >
                   Reject
                 </button>
               </div>
@@ -148,9 +273,7 @@ export default function AdminRequestsPage() {
         </ul>
       </div>
 
-      <p className="text-xs text-gray-500">
-        Approve akan membuat akun di Auth, mengisi <code>public.users</code> beserta role, lalu menghapus request.
-      </p>
+      <p className="text-xs text-gray-500">Pastikan nominal sesuai bukti sebelum Approve.</p>
     </div>
   )
 }
